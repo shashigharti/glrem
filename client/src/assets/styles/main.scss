@@ -1,0 +1,75 @@
+/* Import Mapbox GL CSS */
+@import "mapbox-gl/dist/mapbox-gl.css";
+
+/* Import React Datepicker CSS */
+@import "react-datepicker/dist/react-datepicker.css";
+
+.main,
+.row {
+  width: 100%;
+  height: 90vh;
+  margin: 0;
+  padding: 0;
+}
+.mapboxgl-canvas {
+  position: absolute;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.title {
+  margin: 15px 0;
+}
+
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f4f4f4;
+}
+.form-group {
+  margin-bottom: 20px;
+}
+.login-box {
+  width: 100%;
+  max-width: 400px;
+  padding: 20px;
+  background-color: white;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+h2 {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.submit {
+  margin: 10px 0;
+}
+
+.quake-info {
+  font-size: 0.9rem;
+  margin: 0px;
+}
+
+.events {
+  .icons {
+    font-size: 0.7rem;
+    a {
+      margin-right: 5px;
+    }
+  }
+
+  .tab-content {
+    height: 300px;
+    overflow-y: scroll;
+  }
+  margin-bottom: 25px;
+}
+
+.analysis {
+  margin: 15px 0;
+}
