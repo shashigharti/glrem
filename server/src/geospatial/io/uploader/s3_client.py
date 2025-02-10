@@ -29,7 +29,7 @@ def upload_file(filepath_src, filename_dest):
 
 
 def copy_files_to_s3(
-    folder, dest="app-analyzed-data", file_types=["tif", "png", "nc", "vtx"]
+    folder, dest="app-analyzed-data", file_types=["tif", "png", "nc", "vtx", "geojson"]
 ):
     for filename in os.listdir(folder):
         ext = filename.split(".")[-1].lower()

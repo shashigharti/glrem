@@ -11,13 +11,13 @@ DATA_PLATFORM = ["Sentinel-1"]
 PROCESSING_LEVEL = ["SLC"]
 BEAM_MODE = "IW"
 RESOLUTION = 200.0
-SUBSWATH = 3
 USE_BURST = False
 
 # ============================
 # AWS Configuration
 # ============================
 AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME", "guardian-space-geospatial-data")
+AWS_PROCESSED_FOLDER = os.getenv("AWS_BUCKET_NAME", "app-analyzed-data-test")
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
 
@@ -38,3 +38,8 @@ OUTPUT = os.getenv("OUTPUT", "/data/output")
 # Logging Configuration
 # ============================
 LOG_FILENAME = os.getenv("LOG_FILENAME", "app.log")
+
+# ============================
+# USGS Credentials
+# ============================
+USGS_ENDPOINT = os.getenv("USGS_ENDPOINT")

@@ -1,77 +1,41 @@
 import os
 import psutil
+import shutil
 
 import numpy as np
 
 import dask
 from dask.distributed import Client
 
+from shapely.geometry import Point
 from pygmtsar import Stack, tqdm_dask, Tiles
 
+from src.config import *
 from src.geospatial.io.uploader.s3_client import copy_files_to_s3
 from src.utils.logger import logger
 from src.geospatial.io.downloader.asf_client import (
-    benchmark,
-    download_dem,
     download_data,
 )
 from src.geospatial.helpers.data_conversion import save_xarray_to_png
-from src.config import *
 
 
-# TODO: some of the params has to set dynamically
-def process_params(params):
-    start = params.get("startdate")
-    end = params.get("enddate")
-    aoi = params.get("areaofinterest")
-    country = params.get("country")
-    print(country)
-
-    if country.lower() == "turkey":
-        asf = {
-            "start": start,
-            "end": end,
-            "dataset": "SLC-BURST",
-            "platform": DATA_PLATFORM,
-            "processingLevel": PROCESSING_LEVEL,
-            "beamMode": BEAM_MODE,
-            "polarization": "VV",
-            "flightDirection": "Descending",
-            "intersectsWith": aoi,
-        }
-        return {
-            "asf": asf,
-            "custom": {
-                "wavelength": "200",
-                "coarsen": "(1, 4)",
-                "product": "3s",
-                "use_burst": True,
-            },
-        }
-
-    asf = {
-        "start": start,
-        "end": end,
+# TODO: some of the params has to be set dynamically
+def _process_asf_params(params):
+    startdate = params.get("startdate")
+    enddate = params.get("enddate")
+    params = {
+        "start": startdate,
+        "end": enddate,
         "dataset": "SENTINEL-1",
         "platform": DATA_PLATFORM,
         "processingLevel": PROCESSING_LEVEL,
         "beamMode": BEAM_MODE,
-        "polarization": "VV+HH",
-        "intersectsWith": aoi,
+        "flightDirection": "Descending",
     }
-    return {
-        "asf": asf,
-        "custom": {"wavelength": "400", "coarsen": "(4, 16)", "use_burst": False},
-    }
+    return params
 
 
-def compute_reframe(sbas, aoi, country="iraq"):
-    if country == "iraq":
-        sbas.compute_reframe(aoi)
-    return sbas
-
-
-def generate_interferogram(params, credentials, workdir, datadir, outputdir):
+def generate_interferogram(params, product=None):
     """
     Generate and process an interferogram using Sentinel-1 data.
 
@@ -85,31 +49,50 @@ def generate_interferogram(params, credentials, workdir, datadir, outputdir):
     Returns:
     - str: Path to the saved interferogram image.
     """
-    resolution = RESOLUTION
-    subswath = SUBSWATH
+    # resolution = RESOLUTION
 
-    processed_params = process_params(params)
-    asf_params = processed_params.get("asf")
-    custom_params = processed_params.get("custom")
+    eventid = params.get("eventid")
+    eventtype = params.get("eventtype")
 
-    orbit = asf_params.get("orbit")
-    polarization = asf_params.get("polarization")
-    wavelength = custom_params.get("wavelength")
-    coarsen = custom_params.get("coarsen")
-    use_burst = custom_params.get("use_burst", USE_BURST)
+    outputdir = os.path.join(OUTPUT, eventtype, eventid)
+    datadir = os.path.join(DATADIR, eventtype)
+    workdir = os.path.join(WORKDIR, eventtype)
+
+    # the downloaded data size uses lots of space so delete
+    # existing data before running interferogram
+    shutil.rmtree(datadir)
+
+    credentials = {
+        "username": ASF_USERNAME,
+        "password": ASF_PASSWORD,
+    }
+    asf_params = _process_asf_params(params)
+    flight_direction = asf_params.get("flightDirection")
+
+    orbit = None
+    if flight_direction == "Descending":
+        orbit = "D"
+
+    wavelength = 200
+    coarsen = (1, 4)
+    subswaths = 123
 
     os.makedirs(outputdir, exist_ok=True)
 
     dem = f"{datadir}/dem.nc"
-    event_id = params["eventid"]
-    print(asf_params, use_burst)
+    eventid = params.get("eventid")
+
+    eventdate = params.get("eventdate")
+    latitude = params.get("latitude")
+    longitude = params.get("longitude")
+    epicenter = Point(longitude, latitude)
 
     S1, aoi = download_data(
-        workdir, datadir, credentials, asf_params, use_burst, subswaths=subswath
+        epicenter, eventdate, workdir, datadir, credentials, asf_params, subswaths
     )
 
-    if custom_params.get("product"):
-        Tiles().download_dem(aoi, filename=dem, product=custom_params["product"])
+    if product:
+        Tiles().download_dem(aoi, filename=dem, product=product)
     else:
         Tiles().download_dem(aoi, filename=dem)
 
@@ -121,17 +104,21 @@ def generate_interferogram(params, credentials, workdir, datadir, outputdir):
         threads_per_worker=min(4, psutil.cpu_count()),
         memory_limit=max(4e9, psutil.virtual_memory().available),
     )
+    print("orbit", orbit)
 
-    if orbit:
-        scenes = S1.scan_slc(datadir, polarization=polarization, orbit=orbit)
-    else:
-        if subswath:
-            scenes = S1.scan_slc(datadir, polarization=polarization, subswath=subswath)
+    slc_params = {
+        "datadir": datadir,
+        "orbit": orbit,
+        "subswath": subswaths,
+    }
+    slc_params = {key: value for key, value in slc_params.items() if value is not None}
+    print("slc_params", slc_params)
+    scenes = S1.scan_slc(**slc_params)
 
     sbas = Stack(workdir, drop_if_exists=True).set_scenes(scenes)
 
     logger.print_log("info", "Processing reframe")
-    sbas = compute_reframe(sbas, aoi, "iraq")
+    sbas.compute_reframe(aoi)
 
     logger.print_log("info", "Processing DEM")
     sbas.load_dem(dem, aoi)
@@ -140,7 +127,8 @@ def generate_interferogram(params, credentials, workdir, datadir, outputdir):
     sbas.compute_align()
 
     logger.print_log("info", "Processing geocode")
-    sbas.compute_geocode(resolution)
+    # sbas.compute_geocode(resolution) # turkey
+    sbas.compute_geocode()
     pairs = [sbas.to_dataframe().index.unique()]
 
     logger.print_log("info", "Processing topo")
@@ -166,7 +154,8 @@ def generate_interferogram(params, credentials, workdir, datadir, outputdir):
     intf = sbas.interferogram(phase_goldstein)
 
     logger.print_log("info", "Processing decimator")
-    decimator = sbas.decimator(resolution=resolution, grid=intf)
+    # decimator = sbas.decimator(resolution=resolution, grid=intf) # turkey
+    decimator = sbas.decimator()
 
     tqdm_dask(
         result := dask.persist(decimator(corr), decimator(intf)),
@@ -176,7 +165,7 @@ def generate_interferogram(params, credentials, workdir, datadir, outputdir):
 
     intf_ll = sbas.ra2ll(intf)
     logger.print_log("info", "Saving Interferogram")
-    filepath_intf_png = os.path.join(outputdir, f"intf.png")
+    filepath_intf_png = os.path.join(outputdir, f"${eventid}-earthquake-intf.png")
     save_xarray_to_png(intf_ll, filepath_intf_png)
 
     # TODO: it will be used later.
@@ -187,7 +176,7 @@ def generate_interferogram(params, credentials, workdir, datadir, outputdir):
     # los_displacement(sbas, unwrap, losdis_filepath)
 
     logger.print_log("info", "Copying files to s3 bucket")
-    dest = os.path.join("app-analyzed-data", event_id)
+    dest = os.path.join(AWS_PROCESSED_FOLDER, eventid)
     copy_files_to_s3(outputdir, dest)
 
     return filepath_intf_png

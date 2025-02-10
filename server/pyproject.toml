@@ -58,6 +58,7 @@ netcdf4 = "^1.7.2"
 moto = "^5.0.27"
 osmnx = "^2.0.1"
 pytest-mock = "^3.14.0"
+tqdm-joblib = "^0.0.4"
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.3.3"

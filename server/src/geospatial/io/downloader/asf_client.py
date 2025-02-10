@@ -1,6 +1,8 @@
 import os
 import time
-from pygmtsar import ASF, S1, Tiles
+from pygmtsar import S1, Tiles
+
+from src.geospatial.lib.asf import ASF
 from src.geospatial.helpers import asf as asf_helper
 from src.geospatial.helpers.visualization import ExtendedStack as Stack
 
@@ -15,7 +17,9 @@ def benchmark(func, *args, **kwargs):
     return result
 
 
-def download_data(workdir, datadir, credentials, asf_params, use_burst=False, **kwargs):
+def download_data(
+    epicenter, eventdate, workdir, datadir, credentials, asf_params, subswaths
+):
     """
     Downloads bursts and orbits from ASF based on the provided parameters and saves them to the specified directories.
 
@@ -35,17 +39,13 @@ def download_data(workdir, datadir, credentials, asf_params, use_burst=False, **
     os.makedirs(workdir, exist_ok=True)
     os.makedirs(datadir, exist_ok=True)
 
-    file_names = []
-    asf = ASF(credentials["username"], credentials["password"])
-    if use_burst:
-        file_names = asf_helper.get_bursts(asf_params)
-        print(f"Bursts found: {len(file_names)}")
-        asf.download(datadir, file_names)
-    else:
-        file_names = asf_helper.get_scenes(asf_params)
-        print(f"Scenes found: {len(file_names)}")
-        print(kwargs["subswaths"])
-        asf.download(datadir, file_names, kwargs["subswaths"])
+    asf = ASF(**credentials)
+    file_names = asf_helper.get_burst_or_scene(asf_params, eventdate, epicenter)
+    print(f"selected scenes: {len(file_names)}", file_names)
+    print(f"subswaths: {subswaths}")
+
+    for swath in str(subswaths):
+        asf.download_scenes(datadir, file_names, swath)
 
     S1.download_orbits(datadir, S1.scan_slc(datadir))
     aoi = S1.scan_slc(datadir)

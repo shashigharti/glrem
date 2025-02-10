@@ -16,11 +16,9 @@ def test_interferogram_turkey():
         filename="earthquake-intf",
         eventtype="earthquake",
         analysis="Interferogram",
-        eventdate="06-02-2023",
+        eventdate="2023-02-06",
         status="processing",
-        startdate="2023-01-28T17:00:00Z",
-        enddate="2023-02-10T16:59:59Z",
-        areaofinterest="LINESTRING(35.7 36, 37 38.8, 36.7 35.8, 38.7 38.5, 38 35.5)",
+        magnitude=5.0,
     )
 
     params_dict = params.model_dump()
@@ -47,9 +45,7 @@ def test_interferogram_iraq():
         analysis="Interferogram",
         eventdate="12-11-2017",
         status="processing",
-        startdate="2017-11-10T18:15:00Z",
-        enddate="2017-11-17T18:14:59Z",
-        areaofinterest="LINESTRING(45.1557 35.4781,46.4695 33.9852)",
+        magnitude=5.0,
     )
 
     params_dict = params.model_dump()

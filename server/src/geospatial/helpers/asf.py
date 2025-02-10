@@ -1,116 +1,134 @@
-import argparse
 import asf_search as asf
-from datetime import datetime
+import geopandas as gpd
+import pandas as pd
+from shapely.geometry import Polygon, box
+
+from src.geospatial.helpers.earthquake import get_daterange, get_aoi
 
 
-def get_scenes(params):
-    scenes = []
+def get_burst_or_scene(
+    params, event_date, epicenter=None, magnitude=None, earthquake_id=None
+):
+    """
+    Fetches Sentinel-1 images based on an earthquake epicenter and date range.
+
+    Parameters:
+    - params (dict): ASF search parameters.
+    - epicenter (shapely.geometry.Point): Latitude and longitude of the earthquake epicenter.
+    - event_date (str): Event date in "YYYY-MM-DD" format.
+    - aoi (shapely.geometry.Polygon, optional): Area of Interest (AOI). Defaults to None.
+
+    Returns:
+    - list: List of selected scene IDs covering the AOI.
+    """
+
+    if earthquake_id:
+        aoi = get_aoi(earthquake_id, magnitude)
+    else:
+        width = 200000  # 200km
+        height = 200000  # 200km
+        aoi = (
+            gpd.GeoSeries([epicenter], crs="EPSG:4326")
+            .to_crs(epsg=3857)
+            .apply(
+                lambda x: box(
+                    x.x - width / 2, x.y - height / 2, x.x + width / 2, x.y + height / 2
+                )
+            )
+            .to_crs(epsg=4326)
+            .iloc[0]
+        )
+
+    params = {**params, "intersectsWith": aoi.wkt}
+    date_range = get_daterange(event_date, 10)
+    params.update({"start": date_range["startdate"], "end": date_range["enddate"]})
+    aoi_gdf = gpd.GeoDataFrame({"geometry": [aoi]}, crs="EPSG:4326")
+    print(params)
+
     results = asf.search(**params)
-
     if not results:
-        print("No Scenes Found")
-        return scenes
+        return []
 
-    print(f"Found {len(results)} scenes:")
-    for result in results:
-        file_id = result.properties.get("fileID", "file ID not available")
-        scenes.append(file_id.replace("-SLC", ""))
+    scenes_df = _process_scenes(results, event_date)
+    selected_scenes_pre_event = _find_best_overlapping_scenes(scenes_df, aoi_gdf)
+    print(f"{selected_scenes_pre_event} pre event scenes found")
 
-    SCENES = [
-        "S1A_IW_SLC__1SDV_20171111T150004_20171111T150032_019219_0208AF_EE89",
-        "S1B_IW_SLC__1SDV_20171117T145900_20171117T145928_008323_00EBAB_B716",
-        "S1B_IW_SLC__1SDV_20171117T145926_20171117T145953_008323_00EBAB_AFB8",
-    ]
+    selected_scenes_post_event = _find_best_overlapping_scenes(
+        scenes_df, aoi_gdf, snapshot_time="post"
+    )
+    print(f"{selected_scenes_post_event} post event scenes found")
 
-    selected_scenes = [scene for scene in scenes if scene in SCENES]
+    selected_scenes = selected_scenes_pre_event + selected_scenes_post_event
     return selected_scenes
 
 
-def get_bursts(params):
-    bursts = []
-    bursts_by_date = {}
-    results = asf.search(**params)
+def _find_best_overlapping_scenes(scenes_gdf, aoi_gdf, snapshot_time="pre"):
+    """
+    Finds the scenes that best cover the area of interest (AOI).
 
-    if not results:
-        print("No Bursts Found")
-        return bursts
+    Parameters:
+    - scenes_df (GeoDataFrame): DataFrame containing scenes with metadata and geometry.
+    - aoi (shapely.geometry.Polygon): Area of Interest (AOI).
+    - snapshot_time (str): Time category ("pre" or "post") to filter scenes.
 
-    print(f"Found {len(results)} results:")
-    for result in results:
-        file_id = result.properties.get("fileID", "File ID not available")
-        swath = result.properties.get("burst", {}).get("subswath", None)
-        date = result.properties.get("startTime", "").split("T")[0]
+    Returns:
+    - list: List of scene IDs that cover the AOI.
+    """
 
-        if "OPERA" in file_id or not swath:
-            continue
+    remaining_aoi = aoi_gdf.geometry.iloc[0]
+    used_scenes = set()
+    filtered_scenes_gdf = scenes_gdf[scenes_gdf["type"] == snapshot_time]
+    while not remaining_aoi.is_empty:
+        best_scene = None
+        best_coverage = 0
 
-        if date not in bursts_by_date:
-            bursts_by_date[date] = {"files": [], "subswaths": set()}
+        for _, scene in filtered_scenes_gdf.iterrows():
+            if scene["scene_id"] in used_scenes:
+                continue
 
-        bursts_by_date[date]["files"].append(file_id)
-        bursts_by_date[date]["subswaths"].add(swath)
+            overlap_area = scene.geometry.intersection(remaining_aoi).area
+            if overlap_area > best_coverage:
+                best_coverage = overlap_area
+                best_scene = scene
 
-    required_subswaths = {"IW1", "IW2", "IW3"}
-    for date, burst_data in bursts_by_date.items():
-        if required_subswaths.issubset(burst_data["subswaths"]):
-            bursts.extend(burst_data["files"])
-        else:
-            print(
-                f"Skipping {date}: Missing swaths {required_subswaths - burst_data['subswaths']}"
-            )
+        if best_scene is None:
+            break
 
-    return bursts
+        used_scenes.add(best_scene["scene_id"])
+        remaining_aoi = remaining_aoi.difference(best_scene.geometry)
 
-
-def extract_times(scene):
-    parts = scene.split("_")
-
-    start_time_str = parts[5]
-    end_time_str = parts[6]
-
-    print(start_time_str, end_time_str)
-
-    start_time = datetime.strptime(start_time_str, "%Y%m%dT%H%M%S")
-    end_time = datetime.strptime(end_time_str, "%Y%m%dT%H%M%S")
-
-    return start_time, end_time
+    return list(used_scenes)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Download data")
+def _process_scenes(results, event_date):
+    """
+    Processes ASF search results into a GeoDataFrame with scene metadata.
 
-    parser.add_argument("--dtype", type=str, help="Burst or Scene")
+    Parameters:
+    - results (list): List of ASF search results.
+    - event_date (str or datetime): Event date to categorize scenes.
 
-    args = parser.parse_args()
+    Returns:
+    - GeoDataFrame: Processed scene data including geometry, orbit, and type (pre/post).
+    """
+    event_date = pd.to_datetime(event_date)
 
-    bursts = []
-    scenes = []
+    scenes_data = []
+    for scene in results:
+        start_time = pd.to_datetime(scene.properties["startTime"])
 
-    area_of_interest = "LINESTRING(35.7 36, 37 38.8, 36.7 35.8, 38.7 38.5, 38 35.5)"
-    if args.dtype == "burst":
-        params = {
-            "start": "2023-01-28T17:00:00Z",
-            "end": "2023-02-10T16:59:59Z",
-            "dataset": "SLC-BURST",
-            "platform": ["Sentinel-1"],
-            "processingLevel": ["SLC"],
-            "beamMode": "IW",
-            "polarization": "VV",
-            "flightDirection": "Descending",
-            "intersectsWith": area_of_interest,
-        }
-        bursts = get_bursts(params)
+        start_date = start_time.replace(tzinfo=None).normalize()
+        event_type = "pre" if start_date < event_date else "post"
 
-    area_of_interest = "LINESTRING(45.1557 35.4781,46.4695 33.9852)"
-    if args.dtype == "scene":
-        params = {
-            "start": "2017-11-10T18:15:00Z",
-            "end": "2017-11-17T18:14:59Z",
-            "dataset": "SENTINEL-1",
-            "platform": ["SENTINEL-1"],
-            "processingLevel": ["SLC"],
-            "beamMode": "IW",
-            # "polarization": "VV+HH",
-            "intersectsWith": area_of_interest,
-        }
-        scenes = get_scenes(params)
+        scenes_data.append(
+            {
+                "scene_id": scene.properties["fileID"],
+                "orbit": scene.properties["orbit"],
+                "acquisition_date": pd.to_datetime(scene.properties["startTime"]),
+                "type": event_type,
+                "geometry": Polygon(scene.geometry["coordinates"][0]),
+            }
+        )
+    print(f"{len(results)} scenes found")
+
+    return gpd.GeoDataFrame(scenes_data, geometry="geometry", crs="EPSG:4326")

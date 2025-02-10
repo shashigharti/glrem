@@ -11,7 +11,11 @@ class TaskCreate(BaseModel):
     filename: str
     eventtype: str
     analysis: Optional[str] = None
-    date: datetime
+    country: str
+    eventdate: datetime
+    startdate: datetime
+    enddate: datetime
+    areaofinterest: Optional[str] = ""
     status: Optional[str] = "Pending"
 
 
@@ -24,7 +28,11 @@ class TaskResponse(BaseModel):
     filename: str
     eventtype: str
     analysis: Optional[str]
-    date: datetime
+    country: str
+    eventdate: datetime
+    startdate: datetime
+    enddate: datetime
+    areaofinterest: Optional[str] = None
     status: str
 
     class Config:
