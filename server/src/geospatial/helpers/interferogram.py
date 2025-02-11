@@ -1,6 +1,8 @@
 import os
+
 import psutil
 import shutil
+import argparse
 
 import numpy as np
 
@@ -11,6 +13,8 @@ from shapely.geometry import Point
 from pygmtsar import Stack, tqdm_dask, Tiles
 
 from src.config import *
+from src.database import get_db
+from src.crud.task import get_tasks, update_task_status
 from src.geospatial.io.uploader.s3_client import copy_files_to_s3
 from src.utils.logger import logger
 from src.geospatial.io.downloader.asf_client import (
@@ -35,7 +39,7 @@ def _process_asf_params(params):
     return params
 
 
-def generate_interferogram(params, product=None):
+def generate_interferogram(params, task, product=None):
     """
     Generate and process an interferogram using Sentinel-1 data.
 
@@ -60,7 +64,16 @@ def generate_interferogram(params, product=None):
 
     # the downloaded data size uses lots of space so delete
     # existing data before running interferogram
-    shutil.rmtree(datadir)
+    logger.print_log("info", "Emptying data directory")
+    # if os.path.exists(datadir):
+    #     shutil.rmtree(datadir)
+
+    # if os.path.exists(workdir):
+    #     shutil.rmtree(workdir)
+
+    os.makedirs(outputdir, exist_ok=True)
+    os.makedirs(datadir, exist_ok=True)
+    os.makedirs(workdir, exist_ok=True)
 
     credentials = {
         "username": ASF_USERNAME,
@@ -77,20 +90,30 @@ def generate_interferogram(params, product=None):
     coarsen = (1, 4)
     subswaths = 123
 
-    os.makedirs(outputdir, exist_ok=True)
-
     dem = f"{datadir}/dem.nc"
     eventid = params.get("eventid")
 
     eventdate = params.get("eventdate")
     latitude = params.get("latitude")
     longitude = params.get("longitude")
+    startdate = params.get("startdate")
+    enddate = params.get("enddate")
     epicenter = Point(longitude, latitude)
 
+    logger.print_log("info", "Downloading Data")
     S1, aoi = download_data(
-        epicenter, eventdate, workdir, datadir, credentials, asf_params, subswaths
+        epicenter,
+        eventdate,
+        workdir,
+        datadir,
+        credentials,
+        asf_params,
+        subswaths,
+        startdate,
+        enddate,
     )
 
+    logger.print_log("info", "Downloading Tiles")
     if product:
         Tiles().download_dem(aoi, filename=dem, product=product)
     else:
@@ -104,15 +127,13 @@ def generate_interferogram(params, product=None):
         threads_per_worker=min(4, psutil.cpu_count()),
         memory_limit=max(4e9, psutil.virtual_memory().available),
     )
-    print("orbit", orbit)
-
     slc_params = {
         "datadir": datadir,
         "orbit": orbit,
         "subswath": subswaths,
     }
     slc_params = {key: value for key, value in slc_params.items() if value is not None}
-    print("slc_params", slc_params)
+    logger.print_log("info", f"slc params: {slc_params}")
     scenes = S1.scan_slc(**slc_params)
 
     sbas = Stack(workdir, drop_if_exists=True).set_scenes(scenes)
@@ -217,3 +238,43 @@ def los_displacement(sbas, unwrap, losdis_filepath):
     )
     los_disp_mm_ll = sbas.ra2ll(sbas.los_displacement_mm(detrend))
     los_disp_mm_ll.to_netcdf(losdis_filepath, engine="netcdf4")
+
+
+def main(taskid: str):
+    db_session = next(get_db())
+    try:
+        task = get_tasks(db_session, taskid=taskid)[0]
+        print(task)
+
+        if not task:
+            raise ValueError(f"Task with ID {taskid} not found.")
+
+        params = {
+            "eventid": task.eventid,
+            "eventtype": task.eventtype,
+            "latitude": task.latitude,
+            "longitude": task.longitude,
+            "startdate": task.startdate,
+            "enddate": task.enddate,
+            "eventdate": task.eventdate,
+        }
+        print(params)
+
+        result = generate_interferogram(params, task.id)
+        logger.print_log("info", f"Generated interferogram saved at: {result}")
+
+        update_task_status(db=db_session, task_id=task.id, status="completed")
+        logger.print_log("info", "Task updated successfully.")
+    except Exception as e:
+        logger.print_log("error", f"Error during interferogram generation: {str(e)}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Generate interferogram for a given task ID"
+    )
+    parser.add_argument("taskid", type=str, help="Task ID to process", default="1")
+    args = parser.parse_args()
+
+    logger.print_log("info", f"Initiated interferogram generation")
+    main(args.taskid)

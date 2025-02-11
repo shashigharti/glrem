@@ -24,20 +24,20 @@ class CustomLogger:
             with open(LOG_FILENAME, "w"):
                 pass
 
-    def print_log(self, level, message):
+    def print_log(self, level, message, exc_info=False):
         """Log message with specified log level."""
         if level.lower() == "debug":
-            self.logger.debug(message)
+            self.logger.debug(message, exc_info=exc_info)
         elif level.lower() == "info":
-            self.logger.info(message)
+            self.logger.info(message, exc_info=exc_info)
         elif level.lower() == "warning":
-            self.logger.warning(message)
+            self.logger.warning(message, exc_info=exc_info)
         elif level.lower() == "error":
-            self.logger.error(message)
+            self.logger.error(message, exc_info=exc_info)
         elif level.lower() == "critical":
-            self.logger.critical(message)
+            self.logger.critical(message, exc_info=exc_info)
         else:
-            self.logger.info(message)
+            self.logger.info(message, exc_info=exc_info)
 
 
 logger = CustomLogger(__name__)

@@ -1,16 +1,14 @@
-import pytz
-
-from datetime import datetime, timedelta
+from datetime import timedelta
 from src.apis.usgs.connection import fetch_shakemap_data
 
 
-def get_daterange(eventdate: str, days_before=10, days_after=10):
+def get_daterange(eventdate, days_before=10, days_after=10):
     """
     Generate a date range around the event date for a given number of days before and after.
 
     Parameters
     ----------
-    eventdate : str
+    eventdate : date
         The date of the event in "YYYY-MM-DD" format.
     days_before : int, optional
         The number of days before the event to include in the range (default is 10).
@@ -25,11 +23,8 @@ def get_daterange(eventdate: str, days_before=10, days_after=10):
         - 'enddate': The calculated end date in "YYYY-MM-DDTHH:MM:SSZ" format.
     """
 
-    event_date = datetime.strptime(eventdate, "%Y-%m-%d")
-    event_date = pytz.UTC.localize(event_date)
-
-    start_date = event_date - timedelta(days=days_before)
-    end_date = event_date + timedelta(days=days_after)
+    start_date = eventdate - timedelta(days=days_before)
+    end_date = eventdate + timedelta(days=days_after)
 
     return {
         "startdate": start_date.strftime("%Y-%m-%dT%H:%M:%SZ"),

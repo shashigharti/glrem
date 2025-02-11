@@ -12,6 +12,7 @@ def create_task(db: Session, task_data: dict):
 
 def get_tasks(
     db: Session,
+    taskid: int = None,
     userid: int = None,
     eventid: str = None,
     latitude: float = None,
@@ -21,6 +22,8 @@ def get_tasks(
     analysis: str = None,
 ):
     query = db.query(Task)
+    if taskid:
+        query = query.filter(Task.id == taskid)
     if userid:
         query = query.filter(Task.userid == userid)
     if eventid:

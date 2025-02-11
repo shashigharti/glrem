@@ -3,11 +3,17 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Polygon, box
 
-from src.geospatial.helpers.earthquake import get_daterange, get_aoi
+from src.geospatial.helpers.earthquake import get_aoi
 
 
 def get_burst_or_scene(
-    params, event_date, epicenter=None, magnitude=None, earthquake_id=None
+    params,
+    event_date,
+    startdate,
+    enddate,
+    epicenter=None,
+    magnitude=None,
+    earthquake_id=None,
 ):
     """
     Fetches Sentinel-1 images based on an earthquake epicenter and date range.
@@ -40,8 +46,7 @@ def get_burst_or_scene(
         )
 
     params = {**params, "intersectsWith": aoi.wkt}
-    date_range = get_daterange(event_date, 10)
-    params.update({"start": date_range["startdate"], "end": date_range["enddate"]})
+    params.update({"start": startdate, "end": enddate})
     aoi_gdf = gpd.GeoDataFrame({"geometry": [aoi]}, crs="EPSG:4326")
     print(params)
 
