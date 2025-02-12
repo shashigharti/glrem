@@ -266,6 +266,7 @@ def main(taskid: str):
         update_task_status(db=db_session, task_id=task.id, status="completed")
         logger.print_log("info", "Task updated successfully.")
     except Exception as e:
+        update_task_status(db=db_session, task_id=task.id, status="error")
         logger.print_log("error", f"Error during interferogram generation: {str(e)}")
 
 
