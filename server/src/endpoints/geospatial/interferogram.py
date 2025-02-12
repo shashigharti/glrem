@@ -1,4 +1,3 @@
-import asyncio
 import subprocess
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
@@ -65,7 +64,6 @@ def interferogram(params: InterferogramRequest, db: Session = Depends(get_db)):
 
         task = create_task(db=db, task_data=params_dict)
         logger.print_log("info", f"Task {task.id} created successfully.")
-        logger.print_log("info", os.environ.items())
 
         command = [
             "/home/ubuntu/envs/guardian/bin/python",

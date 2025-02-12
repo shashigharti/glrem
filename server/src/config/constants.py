@@ -17,7 +17,7 @@ USE_BURST = False
 # AWS Configuration
 # ============================
 AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME", "guardian-space-geospatial-data")
-AWS_PROCESSED_FOLDER = os.getenv("AWS_BUCKET_NAME", "app-analyzed-data")
+AWS_PROCESSED_FOLDER = os.getenv("AWS_PROCESSED_FOLDER", "app-analyzed-data")
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
 
@@ -48,3 +48,9 @@ USGS_ENDPOINT = os.getenv("USGS_ENDPOINT")
 # SQLALCHEMY_DATABASE_URL
 # ============================
 SQLALCHEMY_DATABASE_URL = os.getenv("SQLALCHEMY_DATABASE_URL")
+
+
+# ============================
+# TEST
+# ============================
+TEST_EVENTID = os.getenv("TEST_EVENTID")

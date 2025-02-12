@@ -1,3 +1,5 @@
+import os
+import subprocess
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -7,7 +9,6 @@ from src.database import get_db
 from src.utils.logger import logger
 from src.schemas.task import TaskResponse
 from src.crud.task import get_tasks, update_task_status
-from src.geospatial.helpers.interferogram import generate_interferogram
 
 router = APIRouter()
 
@@ -49,24 +50,34 @@ def regenerate_task_endpoint(
             status_code=404, detail="Task not found or cannot be regenerated"
         )
 
-    params = {
-        "userid": task.userid,
-        "eventid": task.eventid,
-        "eventdate": task.eventdate,
-        "status": task.status,
-        "location": task.location,
-        "filename": task.filename,
-        "eventtype": task.eventtype,
-        "analysis": task.analysis,
-        "country": task.country,
-        "latitude": task.latitude,
-        "longitude": task.longitude,
-        "magnitude": task.magnitude,
-    }
     try:
-        generate_interferogram(params)
-    except Exception as e:
-        logger.print_log("error", f"Error generating interferogram: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error generating interferogram.")
+        logger.print_log("info", f"Task {task.id} created successfully.")
 
-    return {"success": True, "filename": params.filename}
+        command = [
+            "/home/ubuntu/envs/guardian/bin/python",
+            "-m",
+            "src.geospatial.helpers.interferogram",
+            str(task.id),
+        ]
+        env = os.environ.copy()
+        env["GMTSAR_PATH"] = "/usr/local/GMTSAR"
+        env["PATH"] = f"{env['GMTSAR_PATH']}/bin:{env['PATH']}"
+        process = subprocess.Popen(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+        )
+
+        logger.print_log(
+            "info", f"Triggered interferogram processing with PID {process.pid}."
+        )
+        return {
+            "success": True,
+            "status": "processing",
+            "task_id": task.id,
+            "filename": task.filename,
+        }
+
+    except Exception as e:
+        logger.print_log(
+            "error", f"Error generating interferogram: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="Error generating interferogram.")

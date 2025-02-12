@@ -33,9 +33,9 @@ def copy_files_to_s3(
 ):
     for filename in os.listdir(folder):
         ext = filename.split(".")[-1].lower()
-        print(ext)
         if ext in file_types:
             filename_dest = f"{dest}/{filename}"
             filename_src = f"{folder}/{filename}"
-            print(f"Calling upload_file with: {filename_src}, {filename_dest}")
+
+            logger.print_log(f"Uploading file:{filename_src} to {filename_dest}")
             upload_file(filename_src, filename_dest)

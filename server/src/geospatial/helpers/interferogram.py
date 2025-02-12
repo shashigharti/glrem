@@ -39,7 +39,7 @@ def _process_asf_params(params):
     return params
 
 
-def generate_interferogram(params, task, product=None):
+def generate_interferogram(params, product=None):
     """
     Generate and process an interferogram using Sentinel-1 data.
 
@@ -65,11 +65,11 @@ def generate_interferogram(params, task, product=None):
     # the downloaded data size uses lots of space so delete
     # existing data before running interferogram
     logger.print_log("info", "Emptying data directory")
-    # if os.path.exists(datadir):
-    #     shutil.rmtree(datadir)
+    if os.path.exists(datadir):
+        shutil.rmtree(datadir)
 
-    # if os.path.exists(workdir):
-    #     shutil.rmtree(workdir)
+    if os.path.exists(workdir):
+        shutil.rmtree(workdir)
 
     os.makedirs(outputdir, exist_ok=True)
     os.makedirs(datadir, exist_ok=True)
@@ -186,7 +186,7 @@ def generate_interferogram(params, task, product=None):
 
     intf_ll = sbas.ra2ll(intf)
     logger.print_log("info", "Saving Interferogram")
-    filepath_intf_png = os.path.join(outputdir, f"${eventid}-earthquake-intf.png")
+    filepath_intf_png = os.path.join(outputdir, f"{eventid}-earthquake-intf.png")
     save_xarray_to_png(intf_ll, filepath_intf_png)
 
     # TODO: it will be used later.
@@ -260,7 +260,7 @@ def main(taskid: str):
         }
         print(params)
 
-        result = generate_interferogram(params, task.id)
+        result = generate_interferogram(params)
         logger.print_log("info", f"Generated interferogram saved at: {result}")
 
         update_task_status(db=db_session, task_id=task.id, status="completed")
