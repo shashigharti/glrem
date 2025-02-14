@@ -17,12 +17,12 @@ class UpdateTaskStatusRequest(BaseModel):
     status: str
 
 
-@router.get("/tasks/", response_model=List[TaskResponse])
+@router.get("/tasks", response_model=List[TaskResponse])
 def get_tasks_endpoint(
-    userid: Optional[int] = None,
+    ukey: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    tasks = get_tasks(db, userid=userid)
+    tasks = get_tasks(db, ukey=ukey)
     return tasks
 
 

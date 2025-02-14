@@ -39,7 +39,7 @@ def _process_asf_params(params):
     return params
 
 
-def generate_interferogram(params, product=None):
+def generate_interferogram(params, product="3s"):
     """
     Generate and process an interferogram using Sentinel-1 data.
 

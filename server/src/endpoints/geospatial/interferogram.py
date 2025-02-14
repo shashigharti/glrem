@@ -7,14 +7,14 @@ from datetime import datetime
 from src.config import *
 from src.utils.logger import logger
 from src.database import get_db
-from src.crud.task import create_task, get_tasks
+from src.crud.task import create_task, get_tasks, update_task_status
 from src.geospatial.helpers.earthquake import get_daterange
 
 router = APIRouter()
 
 
 class InterferogramRequest(BaseModel):
-    userid: int
+    ukey: str
     eventid: str
     eventdate: str
     status: str
@@ -90,6 +90,7 @@ def interferogram(params: InterferogramRequest, db: Session = Depends(get_db)):
         }
 
     except Exception as e:
+        update_task_status(db=db, task_id=task.id, status="error")
         logger.print_log(
             "error", f"Error generating interferogram: {str(e)}", exc_info=True
         )

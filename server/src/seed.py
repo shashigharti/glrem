@@ -30,6 +30,7 @@ def seed_users():
         if not existing_user:
             hashed_password = hash_password("admin123")
             new_user = User(
+                ukey="001",
                 username="admin",
                 email="shashi.gharti@gmail.com",
                 hashed_password=hashed_password,

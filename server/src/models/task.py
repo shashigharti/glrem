@@ -23,5 +23,5 @@ class Task(Base):
     areaofinterest = Column(String)
     status = Column(String, index=True)
 
-    userid = Column(Integer, ForeignKey("users.id"), index=True)
+    ukey = Column(String, ForeignKey("users.ukey"), index=True)
     user = relationship("User", back_populates="tasks")
