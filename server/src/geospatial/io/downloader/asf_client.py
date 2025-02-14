@@ -51,6 +51,9 @@ def download_data(
 
     logger.print_log("info", "Searching Scenes")
     asf = ASF(**credentials)
+    file_names = asf_helper.get_burst_or_scene(
+        asf_params, eventdate, startdate, enddate, epicenter=epicenter
+    )
     if TEST_EVENTID != "us6000jlqa":
         file_names = asf_helper.get_burst_or_scene(
             asf_params, eventdate, startdate, enddate, epicenter=epicenter
@@ -58,12 +61,14 @@ def download_data(
     else:
         # TODO: it is for testing only
         file_names = [
-            "S1A_IW_SLC__1SDV_20230210T033516_20230210T033543_047168_05A8CD_D767",
-            "S1A_IW_SLC__1SDV_20230210T033451_20230210T033518_047168_05A8CD_E5B0",
-            "S1A_IW_SLC__1SDV_20230210T033426_20230210T033454_047168_05A8CD_FAA6",
-            "S1A_IW_SLC__1SDV_20230129T033427_20230129T033455_046993_05A2FE_6FF2",
+            "S1A_IW_SLC__1SDV_20230129T033517_20230129T033544_046993_05A2FE_E089",
             "S1A_IW_SLC__1SDV_20230129T033452_20230129T033519_046993_05A2FE_BE0B",
+            "S1A_IW_SLC__1SDV_20230129T033427_20230129T033455_046993_05A2FE_6FF2",
+            "S1A_IW_SLC__1SDV_20230210T033426_20230210T033454_047168_05A8CD_FAA6",
+            "S1A_IW_SLC__1SDV_20230210T033451_20230210T033518_047168_05A8CD_E5B0",
+            "S1A_IW_SLC__1SDV_20230210T033516_20230210T033543_047168_05A8CD_D767",
         ]
+
     logger.print_log("info", f"Selected scenes: {len(file_names)}")
     print(f"selected scenes: {len(file_names)}", file_names)
 

@@ -1,42 +1,36 @@
 import os
-
 import psutil
 import shutil
 import argparse
 
 import numpy as np
-
 import dask
 from dask.distributed import Client
-
 from shapely.geometry import Point
 from pygmtsar import Stack, tqdm_dask, Tiles
 
-from src.config import *
+# from src.geospatial.lib.pygmtsar import Stack, tqdm_dask, Tiles
+
+from src.config import (
+    RESOLUTION,
+    AWS_PROCESSED_FOLDER,
+    OUTPUT,
+    DATADIR,
+    WORKDIR,
+    ASF_USERNAME,
+    ASF_PASSWORD,
+    POLARIZATION,
+    WAVELENGTH,
+    COARSEN,
+    SUBSWATH,
+)
 from src.database import get_db
 from src.crud.task import get_tasks, update_task_status
 from src.geospatial.io.uploader.s3_client import copy_files_to_s3
 from src.utils.logger import logger
-from src.geospatial.io.downloader.asf_client import (
-    download_data,
-)
+from src.geospatial.io.downloader.asf_client import download_data
 from src.geospatial.helpers.data_conversion import save_xarray_to_png
-
-
-# TODO: some of the params has to be set dynamically
-def _process_asf_params(params):
-    startdate = params.get("startdate")
-    enddate = params.get("enddate")
-    params = {
-        "start": startdate,
-        "end": enddate,
-        "dataset": "SENTINEL-1",
-        "platform": DATA_PLATFORM,
-        "processingLevel": PROCESSING_LEVEL,
-        "beamMode": BEAM_MODE,
-        "flightDirection": "Descending",
-    }
-    return params
+from src.geospatial.helpers.asf import process_asf_params
 
 
 def generate_interferogram(params, product="3s"):
@@ -53,7 +47,6 @@ def generate_interferogram(params, product="3s"):
     Returns:
     - str: Path to the saved interferogram image.
     """
-    # resolution = RESOLUTION
 
     eventid = params.get("eventid")
     eventtype = params.get("eventtype")
@@ -79,16 +72,10 @@ def generate_interferogram(params, product="3s"):
         "username": ASF_USERNAME,
         "password": ASF_PASSWORD,
     }
-    asf_params = _process_asf_params(params)
+    asf_params = process_asf_params(params)
     flight_direction = asf_params.get("flightDirection")
 
-    orbit = None
-    if flight_direction == "Descending":
-        orbit = "D"
-
-    wavelength = 200
-    coarsen = (1, 4)
-    subswaths = 123
+    orbit = "D" if flight_direction == "Descending" else None
 
     dem = f"{datadir}/dem.nc"
     eventid = params.get("eventid")
@@ -101,17 +88,19 @@ def generate_interferogram(params, product="3s"):
     epicenter = Point(longitude, latitude)
 
     logger.print_log("info", "Downloading Data")
-    S1, aoi = download_data(
+    S1, aoi_gdf = download_data(
         epicenter,
         eventdate,
         workdir,
         datadir,
         credentials,
         asf_params,
-        subswaths,
+        SUBSWATH,
         startdate,
         enddate,
     )
+    aoi = aoi_gdf.unary_union.minimum_rotated_rectangle
+    print(f"aoi: {aoi} type: {type(aoi)}")
 
     logger.print_log("info", "Downloading Tiles")
     if product:
@@ -127,11 +116,7 @@ def generate_interferogram(params, product="3s"):
         threads_per_worker=min(4, psutil.cpu_count()),
         memory_limit=max(4e9, psutil.virtual_memory().available),
     )
-    slc_params = {
-        "datadir": datadir,
-        "orbit": orbit,
-        "subswath": subswaths,
-    }
+    slc_params = {"datadir": datadir, "orbit": orbit, "subswath": SUBSWATH}
     slc_params = {key: value for key, value in slc_params.items() if value is not None}
     logger.print_log("info", f"slc params: {slc_params}")
     scenes = S1.scan_slc(**slc_params)
@@ -148,7 +133,7 @@ def generate_interferogram(params, product="3s"):
     sbas.compute_align()
 
     logger.print_log("info", "Processing geocode")
-    # sbas.compute_geocode(resolution) # turkey
+    # sbas.compute_geocode(RESOLUTION)  # turkey
     sbas.compute_geocode()
     pairs = [sbas.to_dataframe().index.unique()]
 
@@ -156,14 +141,14 @@ def generate_interferogram(params, product="3s"):
     topo = sbas.get_topo()
     data = sbas.open_data()
     intensity = sbas.multilooking(
-        np.square(np.abs(data)), wavelength=wavelength, coarsen=coarsen
+        np.square(np.abs(data)), wavelength=WAVELENGTH, coarsen=COARSEN
     )
 
     logger.print_log("info", "Processing phasediff")
     phase = sbas.phasediff(pairs, data, topo)
 
     logger.print_log("info", "Processing multilooking")
-    phase = sbas.multilooking(phase, wavelength=wavelength, coarsen=coarsen)
+    phase = sbas.multilooking(phase, wavelength=WAVELENGTH, coarsen=COARSEN)
 
     logger.print_log("info", "Processing correlation")
     corr = sbas.correlation(phase, intensity)
@@ -175,9 +160,10 @@ def generate_interferogram(params, product="3s"):
     intf = sbas.interferogram(phase_goldstein)
 
     logger.print_log("info", "Processing decimator")
-    # decimator = sbas.decimator(resolution=resolution, grid=intf) # turkey
+    # decimator = sbas.decimator(resolution=RESOLUTION, grid=intf)
     decimator = sbas.decimator()
 
+    logger.print_log("info", "Processing phase and correlation")
     tqdm_dask(
         result := dask.persist(decimator(corr), decimator(intf)),
         desc="Compute Phase and Correlation",
@@ -185,7 +171,7 @@ def generate_interferogram(params, product="3s"):
     corr, intf = [grid[0] for grid in result]
 
     intf_ll = sbas.ra2ll(intf)
-    logger.print_log("info", "Saving Interferogram")
+    logger.print_log("info", "Saving interferogram")
     filepath_intf_png = os.path.join(outputdir, f"{eventid}-earthquake-intf.png")
     save_xarray_to_png(intf_ll, filepath_intf_png)
 
@@ -244,7 +230,6 @@ def main(taskid: str):
     db_session = next(get_db())
     try:
         task = get_tasks(db_session, taskid=taskid)[0]
-        print(task)
 
         if not task:
             raise ValueError(f"Task with ID {taskid} not found.")
@@ -267,7 +252,9 @@ def main(taskid: str):
         logger.print_log("info", "Task updated successfully.")
     except Exception as e:
         update_task_status(db=db_session, task_id=task.id, status="error")
-        logger.print_log("error", f"Error during interferogram generation: {str(e)}")
+        logger.print_log(
+            "error", f"Error generating interferogram: {str(e)}", exc_info=True
+        )
 
 
 if __name__ == "__main__":

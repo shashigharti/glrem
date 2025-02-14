@@ -1,16 +1,152 @@
 import os
+import psutil
+import argparse
+
+import numpy as np
 import geopandas as gpd
 import osmnx as ox
 import rasterio
 from rasterio.features import shapes
-from shapely.geometry import shape
+from shapely.geometry import shape, Point
 import pandas as pd
+from pygmtsar import Stack, Tiles, S1
+from dask.distributed import Client
+
+from src.database import get_db
+from src.crud.task import get_tasks
+from src.geospatial.helpers.asf import process_asf_params
+from src.config import (
+    AWS_PROCESSED_FOLDER,
+    RESOLUTION,
+    OUTPUT,
+    DATADIR,
+    WORKDIR,
+    ASF_USERNAME,
+    ASF_PASSWORD,
+)
+from src.geospatial.io.downloader.asf_client import download_data
+from src.utils.logger import logger
+from src.geospatial.helpers.data_conversion import save_npy_to_png, save_npy_to_tif
 
 
-def change_detection(pre_event_data, post_event_data, destdir):
-    # TODO: Change detection code here
+def change_detection(params, product="3s"):
+    eventid = params.get("eventid")
+    eventtype = params.get("eventtype")
 
-    output_file = os.path.join(destdir, "change-detection.tif")
+    outputdir = os.path.join(OUTPUT, eventtype, eventid)
+    datadir = os.path.join(DATADIR, eventtype)
+    workdir = os.path.join(WORKDIR, eventtype)
+
+    os.makedirs(outputdir, exist_ok=True)
+    os.makedirs(datadir, exist_ok=True)
+    os.makedirs(workdir, exist_ok=True)
+
+    credentials = {
+        "username": ASF_USERNAME,
+        "password": ASF_PASSWORD,
+    }
+    asf_params = process_asf_params(params)
+    flight_direction = asf_params.get("flightDirection")
+
+    orbit = None
+    if flight_direction == "Descending":
+        orbit = "D"
+    wavelength = 200
+    coarsen = (1, 4)
+    subswaths = 123
+
+    dem = f"{datadir}/dem.nc"
+    eventid = params.get("eventid")
+
+    eventdate = params.get("eventdate")
+    latitude = params.get("latitude")
+    longitude = params.get("longitude")
+    startdate = params.get("startdate")
+    enddate = params.get("enddate")
+    epicenter = Point(longitude, latitude)
+
+    logger.print_log("info", "Downloading Data")
+    S1, aoi = download_data(
+        epicenter,
+        eventdate,
+        workdir,
+        datadir,
+        credentials,
+        asf_params,
+        subswaths,
+        startdate,
+        enddate,
+    )
+    aoi = S1.scan_slc(datadir)
+    logger.print_log("info", f"AOI {aoi}, type: {type(aoi)}")
+
+    logger.print_log("info", "Downloading Tiles")
+    if product:
+        Tiles().download_dem(aoi, filename=dem, product=product)
+    else:
+        Tiles().download_dem(aoi, filename=dem)
+
+    if "client" in globals():
+        client.close()
+
+    client = Client(
+        n_workers=max(1, psutil.cpu_count() // 4),
+        threads_per_worker=min(4, psutil.cpu_count()),
+        memory_limit=max(4e9, psutil.virtual_memory().available),
+    )
+    slc_params = {
+        "datadir": datadir,
+        # "orbit": orbit,
+        "subswath": subswaths,
+    }
+    slc_params = {key: value for key, value in slc_params.items() if value is not None}
+    logger.print_log("info", f"slc params: {slc_params}")
+    scenes = S1.scan_slc(**slc_params)
+
+    sbas = Stack(workdir, drop_if_exists=True).set_scenes(scenes)
+    print(sbas.__dict__)
+
+    logger.print_log("info", "Processing reframe")
+    sbas.compute_reframe(aoi)
+
+    logger.print_log("info", "Processing DEM")
+    sbas.load_dem(dem, aoi)
+
+    logger.print_log("info", "Processing alignment")
+    sbas.compute_align()
+
+    logger.print_log("info", "Processing geocode")
+    sbas.compute_geocode(RESOLUTION)
+
+    logger.print_log("info", "Processing topo")
+    data = sbas.open_data()
+    intensity = sbas.multilooking(
+        np.square(np.abs(data)), wavelength=wavelength, coarsen=coarsen
+    )
+
+    intensity_dB_before = 10 * np.log10(np.abs(intensity[0]) + 1e-10)
+    intensity_dB_after = 10 * np.log10(np.abs(intensity[1]) + 1e-10)
+
+    logger.print_log("info", "Performing change detection in dB space")
+    change_map_dB = np.abs(intensity_dB_before - intensity_dB_after)
+
+    threshold_min = -2
+    threshold_max = 2
+    change_map_dB = np.where(
+        (change_map_dB < threshold_min) | (change_map_dB > threshold_max),
+        change_map_dB,
+        0,
+    )
+
+    bbox = aoi.geometry.apply(lambda geom: geom.coords[:])
+    logger.print_log("info", "Saving change detection")
+    # filepath_cd_png = os.path.join(outputdir, f"{eventid}-earthquake-cd.png")
+    # save_npy_to_png(change_map_dB, coords, filepath_cd_png)
+
+    filepath_cd_tif = os.path.join(outputdir, f"{eventid}-earthquake-cd.tif")
+    save_npy_to_tif(change_map_dB, bbox, filepath_cd_tif)
+
+    # return filepath_cd_png
 
 
 def damage_assessment(
@@ -157,3 +293,42 @@ def damage_assessment(
                 )
 
     return total_damaged_roads_length_km, total_damaged_buildings_count
+
+
+def main(taskid: str):
+    db_session = next(get_db())
+    try:
+        task = get_tasks(db_session, taskid=taskid)[0]
+        print(task)
+
+        if not task:
+            raise ValueError(f"Task with ID {taskid} not found.")
+
+        params = {
+            "eventid": task.eventid,
+            "eventtype": task.eventtype,
+            "latitude": task.latitude,
+            "longitude": task.longitude,
+            "startdate": task.startdate,
+            "enddate": task.enddate,
+            "eventdate": task.eventdate,
+        }
+        print(params)
+
+        result = change_detection(params)
+        logger.print_log("info", f"Generated interferogram saved at: {result}")
+    except Exception as e:
+        logger.print_log(
+            "error", f"Error during change detection: {str(e)}", exc_info=True
+        )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Generate change detection for a given task ID"
+    )
+    parser.add_argument("taskid", type=str, help="Task ID to process", default="1")
+    args = parser.parse_args()
+
+    logger.print_log("info", f"Initiated change detection generation")
+    main(args.taskid)

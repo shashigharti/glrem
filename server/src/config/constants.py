@@ -11,7 +11,10 @@ DATA_PLATFORM = ["Sentinel-1"]
 PROCESSING_LEVEL = ["SLC"]
 BEAM_MODE = "IW"
 RESOLUTION = 200.0
-USE_BURST = False
+POLARIZATION = "VV"
+WAVELENGTH = 200
+COARSEN = (1, 4)
+SUBSWATH = 123
 
 # ============================
 # AWS Configuration

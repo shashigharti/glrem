@@ -6,7 +6,7 @@ from osgeo import gdal
 import geojson
 import matplotlib.pyplot as plt
 import rasterio
-from rasterio.transform import from_origin
+from rasterio.transform import from_origin, from_bounds
 
 
 def save_xarray_to_tif(data_array, tif_filepath):
@@ -106,6 +106,69 @@ def save_xarray_to_png(data_array, filepath, colormap="viridis", black_threshold
         geojson.dump(bbox, f)
 
     return filepath, filepath_geojson
+
+
+def save_npy_to_png(
+    data,
+    coords,
+    filepath,
+    cmap="viridis",
+    black_threshold=10,
+):
+
+    def normalize_data(data):
+        return (data - np.nanmin(data)) / (np.nanmax(data) - np.nanmin(data))
+
+    data_normalized = normalize_data(data)
+    cmap = plt.get_cmap(cmap)
+    data_colored = cmap(data_normalized)
+
+    image_colored = (data_colored[:, :, :4] * 255).astype(np.uint8)
+    black_mask = (image_colored[..., :3] < black_threshold).all(axis=-1)
+    image_colored[black_mask, 3] = 0
+
+    image = Image.fromarray(image_colored)
+    image.save(filepath)
+
+    bbox = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": coords,
+                },
+                "properties": {"orbit": "D"},
+            }
+        ],
+    }
+
+    filepath_geojson = filepath.replace(".png", ".geojson")
+    with open(filepath_geojson, "w") as f:
+        geojson.dump(bbox, f)
+
+    return filepath, filepath_geojson
+
+
+def save_npy_to_tif(npy_file, bbox, tif_file, crs="EPSG:4326"):
+    data = np.load(npy_file)
+    height, width = data.shape
+    transform = from_bounds(*bbox, width, height)
+
+    with rasterio.open(
+        tif_file,
+        "w",
+        driver="GTiff",
+        height=height,
+        width=width,
+        count=1,
+        dtype=data.dtype,
+        crs=crs,
+        transform=transform,
+    ) as dst:
+        dst.write(data, 1)
+    return tif_file
 
 
 def save_tif_to_png(filepath, dest):

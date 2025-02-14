@@ -37,5 +37,7 @@ def copy_files_to_s3(
             filename_dest = f"{dest}/{filename}"
             filename_src = f"{folder}/{filename}"
 
-            logger.print_log(f"Uploading file:{filename_src} to {filename_dest}")
+            logger.print_log(
+                "info", f"Uploading file:{filename_src} to {filename_dest}"
+            )
             upload_file(filename_src, filename_dest)

@@ -4,6 +4,11 @@ import pandas as pd
 from shapely.geometry import Polygon, box
 
 from src.geospatial.helpers.earthquake import get_aoi
+from src.config import (
+    DATA_PLATFORM,
+    PROCESSING_LEVEL,
+    BEAM_MODE,
+)
 
 
 def get_burst_or_scene(
@@ -137,3 +142,18 @@ def _process_scenes(results, event_date):
     print(f"{len(results)} scenes found")
 
     return gpd.GeoDataFrame(scenes_data, geometry="geometry", crs="EPSG:4326")
+
+
+def process_asf_params(params):
+    startdate = params.get("startdate")
+    enddate = params.get("enddate")
+    params = {
+        "start": startdate,
+        "end": enddate,
+        "dataset": "SENTINEL-1",
+        "platform": DATA_PLATFORM,
+        "processingLevel": PROCESSING_LEVEL,
+        "beamMode": BEAM_MODE,
+        "flightDirection": "Descending",
+    }
+    return params
