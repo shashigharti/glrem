@@ -1,5 +1,3 @@
-import os
-import subprocess
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -9,6 +7,7 @@ from src.database import get_db
 from src.utils.logger import logger
 from src.schemas.task import TaskResponse
 from src.crud.task import get_tasks, update_task_status
+from src.geospatial.helpers.interferogram import generate_interferogram
 
 router = APIRouter()
 
@@ -51,24 +50,9 @@ def regenerate_task_endpoint(
         )
 
     try:
-        logger.print_log("info", f"Task {task.id} created successfully.")
+        logger.print_log("info", f"Triggered interferogram processing.")
+        generate_interferogram(task.id)
 
-        command = [
-            "/home/ubuntu/envs/guardian/bin/python",
-            "-m",
-            "src.geospatial.helpers.interferogram",
-            str(task.id),
-        ]
-        env = os.environ.copy()
-        env["GMTSAR_PATH"] = "/usr/local/GMTSAR"
-        env["PATH"] = f"{env['GMTSAR_PATH']}/bin:{env['PATH']}"
-        process = subprocess.Popen(
-            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
-        )
-
-        logger.print_log(
-            "info", f"Triggered interferogram processing with PID {process.pid}."
-        )
         return {
             "success": True,
             "status": "processing",

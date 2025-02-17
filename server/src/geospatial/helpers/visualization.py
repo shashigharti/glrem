@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 from functools import wraps
-from pygmtsar import Stack
+from src.geospatial.lib.pygmtsar import Stack
 
 
 def plot_and_save(plot_func, filename, *args, **kwargs):

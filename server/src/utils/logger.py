@@ -1,6 +1,8 @@
-import logging
 import os
+import sys
+import logging
 from functools import wraps
+
 from src.config import LOG_FILENAME
 
 
@@ -16,8 +18,11 @@ class CustomLogger:
         if not self.logger.hasHandlers():
             logging.basicConfig(
                 level=logging.DEBUG,
-                filename=LOG_FILENAME,
                 format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                handlers=[
+                    logging.FileHandler(LOG_FILENAME),
+                    logging.StreamHandler(sys.stdout),
+                ],
             )
 
         if not os.path.exists(LOG_FILENAME):
@@ -27,17 +32,17 @@ class CustomLogger:
     def print_log(self, level, message, exc_info=False):
         """Log message with specified log level."""
         if level.lower() == "debug":
-            self.logger.debug(message, exc_info=exc_info)
+            self.logger.debug(message)
         elif level.lower() == "info":
-            self.logger.info(message, exc_info=exc_info)
+            self.logger.info(message)
         elif level.lower() == "warning":
-            self.logger.warning(message, exc_info=exc_info)
+            self.logger.warning(message, exc_info=True)
         elif level.lower() == "error":
-            self.logger.error(message, exc_info=exc_info)
+            self.logger.error(message, exc_info=True)
         elif level.lower() == "critical":
-            self.logger.critical(message, exc_info=exc_info)
+            self.logger.critical(message, exc_info=True)
         else:
-            self.logger.info(message, exc_info=exc_info)
+            self.logger.info(message)
 
 
 logger = CustomLogger(__name__)

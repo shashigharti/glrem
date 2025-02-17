@@ -1,4 +1,3 @@
-import subprocess
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -9,6 +8,7 @@ from src.utils.logger import logger
 from src.database import get_db
 from src.crud.task import create_task, get_tasks, update_task_status
 from src.geospatial.helpers.earthquake import get_daterange
+from src.geospatial.helpers.interferogram import generate_interferogram
 
 router = APIRouter()
 
@@ -29,7 +29,10 @@ class InterferogramRequest(BaseModel):
 
 
 @router.post("/interferogram")
-def interferogram(params: InterferogramRequest, db: Session = Depends(get_db)):
+def interferogram(
+    params: InterferogramRequest,
+    db: Session = Depends(get_db),
+):
     try:
         params_dict = params.model_dump()
 
@@ -65,22 +68,8 @@ def interferogram(params: InterferogramRequest, db: Session = Depends(get_db)):
         task = create_task(db=db, task_data=params_dict)
         logger.print_log("info", f"Task {task.id} created successfully.")
 
-        command = [
-            "/home/ubuntu/envs/guardian/bin/python",
-            "-m",
-            "src.geospatial.helpers.interferogram",
-            str(task.id),
-        ]
-        env = os.environ.copy()
-        env["GMTSAR_PATH"] = "/usr/local/GMTSAR"
-        env["PATH"] = f"{env['GMTSAR_PATH']}/bin:{env['PATH']}"
-        process = subprocess.Popen(
-            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
-        )
-
-        logger.print_log(
-            "info", f"Triggered interferogram processing with PID {process.pid}."
-        )
+        logger.print_log("info", f"Triggered interferogram processing.")
+        generate_interferogram(task.id)
 
         return {
             "success": True,

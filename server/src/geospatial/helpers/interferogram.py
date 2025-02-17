@@ -1,4 +1,5 @@
 import os
+import time
 import psutil
 import shutil
 import argparse
@@ -7,9 +8,7 @@ import numpy as np
 import dask
 from dask.distributed import Client
 from shapely.geometry import Point
-from pygmtsar import Stack, tqdm_dask, Tiles
-
-# from src.geospatial.lib.pygmtsar import Stack, tqdm_dask, Tiles
+from src.geospatial.lib.pygmtsar import Stack, tqdm_dask, Tiles
 
 from src.config import (
     RESOLUTION,
@@ -33,7 +32,7 @@ from src.geospatial.helpers.data_conversion import save_xarray_to_png
 from src.geospatial.helpers.asf import process_asf_params
 
 
-def generate_interferogram(params, product="3s"):
+def _generate_interferogram(params, product="3s"):
     """
     Generate and process an interferogram using Sentinel-1 data.
 
@@ -59,9 +58,11 @@ def generate_interferogram(params, product="3s"):
     # existing data before running interferogram
     logger.print_log("info", "Emptying data directory")
     if os.path.exists(datadir):
+        time.sleep(1)
         shutil.rmtree(datadir)
 
     if os.path.exists(workdir):
+        time.sleep(1)
         shutil.rmtree(workdir)
 
     os.makedirs(outputdir, exist_ok=True)
@@ -111,11 +112,15 @@ def generate_interferogram(params, product="3s"):
     if "client" in globals():
         client.close()
 
+    dask.config.set({"logging.distributed": "info"})
+
     client = Client(
         n_workers=max(1, psutil.cpu_count() // 4),
         threads_per_worker=min(4, psutil.cpu_count()),
         memory_limit=max(4e9, psutil.virtual_memory().available),
     )
+    logger.print_log("info", "Dask Client dashboard: %s", client.dashboard_link)
+
     slc_params = {"datadir": datadir, "orbit": orbit, "subswath": SUBSWATH}
     slc_params = {key: value for key, value in slc_params.items() if value is not None}
     logger.print_log("info", f"slc params: {slc_params}")
@@ -226,7 +231,7 @@ def los_displacement(sbas, unwrap, losdis_filepath):
     los_disp_mm_ll.to_netcdf(losdis_filepath, engine="netcdf4")
 
 
-def main(taskid: str):
+def generate_interferogram(taskid: str):
     db_session = next(get_db())
     try:
         task = get_tasks(db_session, taskid=taskid)[0]
@@ -245,7 +250,7 @@ def main(taskid: str):
         }
         print(params)
 
-        result = generate_interferogram(params)
+        result = _generate_interferogram(params)
         logger.print_log("info", f"Generated interferogram saved at: {result}")
 
         update_task_status(db=db_session, task_id=task.id, status="completed")
@@ -265,4 +270,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     logger.print_log("info", f"Initiated interferogram generation")
-    main(args.taskid)
+    generate_interferogram(args.taskid)

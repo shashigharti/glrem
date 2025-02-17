@@ -1,6 +1,6 @@
 import os
 import time
-from pygmtsar import S1, Tiles
+from src.geospatial.lib.pygmtsar import S1, Tiles
 
 from src.config import TEST_EVENTID
 from src.utils.logger import logger
@@ -72,10 +72,13 @@ def download_data(
     logger.print_log("info", f"Selected scenes: {len(file_names)}")
     print(f"selected scenes: {len(file_names)}", file_names)
 
-    logger.print_log("info", f"Downloading Scenes: {file_names}")
-    for swath in str(subswaths):
-        asf.download_scenes(datadir, file_names, swath)
+    logger.print_log("info", f"Start downloading scenes: {file_names}")
+    session = asf.get_asf_session()
+    for index, swath in enumerate(str(subswaths)):
+        logger.print_log("info", f"Processing for swath:{index}")
+        asf.download_scenes(datadir, file_names, swath, session=session)
 
+    logger.print_log("info", f"Downloading Orbits")
     S1.download_orbits(datadir, S1.scan_slc(datadir))
     aoi = S1.scan_slc(datadir)
 
