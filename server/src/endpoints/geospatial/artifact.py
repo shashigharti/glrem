@@ -29,22 +29,39 @@ async def get_tile(eventid: str, z: int, x: int, y: int):
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 
-@router.get("/get-files")
-async def get_files(filename: str, eventid: str):
-    try:
+import os
+import json
+import base64
+import botocore
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
+router = APIRouter()
+
+
+@router.get("/get-files")
+async def get_files(filename: str, eventid: str, responsetype: str = "url"):
+    try:
         image_file_key = os.path.join(AWS_PROCESSED_FOLDER, eventid, f"{filename}.png")
         meta_file_key = os.path.join(
             AWS_PROCESSED_FOLDER, eventid, f"{filename}.geojson"
         )
-        print("files", image_file_key, meta_file_key)
+        geojson_object = s3_client.get_object(Bucket=AWS_BUCKET_NAME, Key=meta_file_key)
+        geojson_data = geojson_object["Body"].read().decode("utf-8")
+
+        if responsetype == "url":
+
+            return JSONResponse(
+                content={
+                    "base_url": "https://guardian-space-geospatial-data.s3.ap-south-1.amazonaws.com/",
+                    "file_name": image_file_key,
+                    "geojson": meta_file_key,
+                }
+            )
 
         png_object = s3_client.get_object(Bucket=AWS_BUCKET_NAME, Key=image_file_key)
         png_data = png_object["Body"].read()
         png_base64 = base64.b64encode(png_data).decode("utf-8")
-
-        geojson_object = s3_client.get_object(Bucket=AWS_BUCKET_NAME, Key=meta_file_key)
-        geojson_data = geojson_object["Body"].read().decode("utf-8")
 
         return JSONResponse(
             content={
@@ -56,6 +73,6 @@ async def get_files(filename: str, eventid: str):
     except s3_client.exceptions.NoSuchKey:
         raise HTTPException(status_code=404, detail="File not found")
     except botocore.exceptions.ClientError as e:
-        raise HTTPException(status_code=500, detail=f"Connection Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"S3 Client Error: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")

@@ -1,7 +1,7 @@
 import datetime
 import asf_search as asf
 import geopandas as gpd
-import pandas as pd
+from shapely import wkt
 from shapely.ops import unary_union
 from shapely.geometry import Polygon, box
 
@@ -30,17 +30,23 @@ def get_burst_or_scene(params, eventdate, startdate, enddate, epicenter, aoi=Non
     - list: A list of scene IDs for images that intersect with the AOI, covering the earthquake event within the specified date range.
     """
 
-    width = 2.7
-    height = 2.7
+    if not aoi:
+        width = 2.7
+        height = 2.7
+        logger.print_log("info", f"epicenter:{epicenter}")
 
-    aoi = box(
-        epicenter.x - width / 2,
-        epicenter.y - height / 2,
-        epicenter.x + width / 2,
-        epicenter.y + height / 2,
-    )
+        aoi = box(
+            epicenter.x - width / 2,
+            epicenter.y - height / 2,
+            epicenter.x + width / 2,
+            epicenter.y + height / 2,
+        )
 
-    aoi_gdf = gpd.GeoSeries([aoi], crs="EPSG:4326")
+        aoi_gdf = gpd.GeoSeries([aoi], crs="EPSG:4326")
+
+    if isinstance(aoi, str):
+        aoi = wkt.loads(aoi)
+
     params = {**params, "intersectsWith": aoi.wkt}
     params.update({"start": startdate, "end": enddate})
     aoi_gdf = gpd.GeoDataFrame({"geometry": [aoi]}, crs="EPSG:4326")
@@ -140,7 +146,7 @@ def _process_scenes(results, event_date):
     - GeoDataFrame: Processed scene data including geometry, orbit, and type (pre/post).
     """
     scenes_data = []
-    event_date = datetime.datetime.strptime(event_date, "%Y-%m-%dT%H:%M:%SZ")
+    # event_date = datetime.datetime.strptime(event_date, "%Y-%m-%dT%H:%M:%SZ")
     for scene in results:
         start_time = scene.properties["startTime"]
         start_date = datetime.datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%SZ")
@@ -148,14 +154,14 @@ def _process_scenes(results, event_date):
         event_type = "pre" if start_date < event_date else "post"
         scenes_data.append(
             {
-                "scene_id": scene.properties["fileID"],
+                "scene_id": scene.properties["sceneName"],
                 "orbit": scene.properties["orbit"],
-                "acquisition_date": pd.to_datetime(scene.properties["startTime"]),
+                "acquisition_date": start_date,
                 "type": event_type,
                 "geometry": Polygon(scene.geometry["coordinates"][0]),
             }
         )
-    logger.print_log(f"{len(scenes_data)} scenes found")
+    logger.print_log("info", f"{len(scenes_data)} scenes found")
     return gpd.GeoDataFrame(scenes_data, geometry="geometry", crs="EPSG:4326")
 
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
@@ -8,6 +8,7 @@ from src.utils.logger import logger
 from src.database import get_db
 from src.crud.task import create_task, get_tasks, update_task_status
 from src.geospatial.helpers.earthquake import get_daterange
+
 from src.geospatial.helpers.interferogram import generate_interferogram
 
 router = APIRouter()
@@ -29,8 +30,9 @@ class InterferogramRequest(BaseModel):
 
 
 @router.post("/interferogram")
-def interferogram(
+async def interferogram(
     params: InterferogramRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     try:
@@ -46,6 +48,7 @@ def interferogram(
         params_dict["enddate"] = datetime.strptime(
             daterange["enddate"], "%Y-%m-%dT%H:%M:%SZ"
         )
+        params_dict["status"] = "processing"
 
         existing_tasks = get_tasks(
             db=db,
@@ -69,7 +72,7 @@ def interferogram(
         logger.print_log("info", f"Task {task.id} created successfully.")
 
         logger.print_log("info", f"Triggered interferogram processing.")
-        generate_interferogram(task.id)
+        background_tasks.add_task(generate_interferogram, task.id)
 
         return {
             "success": True,

@@ -2,7 +2,8 @@ import os
 import time
 from src.geospatial.lib.pygmtsar import S1, Tiles
 
-from src.config import TEST_EVENTID
+
+from src.config.examples import AOI, SCENES
 from src.utils.logger import logger
 from src.geospatial.lib.asf import ASF
 from src.geospatial.helpers import asf as asf_helper
@@ -29,6 +30,7 @@ def download_data(
     subswaths,
     startdate,
     enddate,
+    **kwargs,
 ):
     """
     Downloads bursts and orbits from ASF based on the provided parameters and saves them to the specified directories.
@@ -51,29 +53,20 @@ def download_data(
 
     logger.print_log("info", "Searching Scenes")
     asf = ASF(**credentials)
-    file_names = asf_helper.get_burst_or_scene(
-        asf_params, eventdate, startdate, enddate, epicenter=epicenter
-    )
-    if TEST_EVENTID != "us6000jlqa":
+
+    eventid = kwargs.get("eventid")
+    file_names = SCENES.get(eventid)
+
+    if not file_names:
         file_names = asf_helper.get_burst_or_scene(
             asf_params, eventdate, startdate, enddate, epicenter=epicenter
         )
-    else:
-        # TODO: it is for testing only
-        file_names = [
-            "S1A_IW_SLC__1SDV_20230129T033517_20230129T033544_046993_05A2FE_E089",
-            "S1A_IW_SLC__1SDV_20230129T033452_20230129T033519_046993_05A2FE_BE0B",
-            "S1A_IW_SLC__1SDV_20230129T033427_20230129T033455_046993_05A2FE_6FF2",
-            "S1A_IW_SLC__1SDV_20230210T033426_20230210T033454_047168_05A8CD_FAA6",
-            "S1A_IW_SLC__1SDV_20230210T033451_20230210T033518_047168_05A8CD_E5B0",
-            "S1A_IW_SLC__1SDV_20230210T033516_20230210T033543_047168_05A8CD_D767",
-        ]
 
     logger.print_log("info", f"Selected scenes: {len(file_names)}")
-    print(f"selected scenes: {len(file_names)}", file_names)
+    print(f"Selected scenes: {len(file_names)}", file_names)
 
     logger.print_log("info", f"Start downloading scenes: {file_names}")
-    session = asf.get_asf_session()
+    session = asf._get_asf_session()
     for index, swath in enumerate(str(subswaths)):
         logger.print_log("info", f"Processing for swath:{index}")
         asf.download_scenes(datadir, file_names, swath, session=session)

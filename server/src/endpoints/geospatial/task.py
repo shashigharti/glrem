@@ -21,20 +21,27 @@ def get_tasks_endpoint(
     ukey: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    tasks = get_tasks(db, ukey=ukey)
-    return tasks
+    try:
+        tasks = get_tasks(db, ukey=ukey)
+        if not tasks:
+            raise HTTPException(status_code=404, detail="No tasks found")
+        return tasks
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 
-@router.patch("/tasks/{task_id}/status", response_model=TaskResponse)
-def update_task_status_endpoint(
+@router.get("/tasks/{task_id}/status", response_model=TaskResponse)
+def get_task_status(
     task_id: int,
-    request: UpdateTaskStatusRequest,
     db: Session = Depends(get_db),
 ):
-    task = update_task_status(db, task_id, request.status)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
+    try:
+        tasks = get_tasks(db, taskid=task_id)
+        if not tasks:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return tasks[0]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 
 @router.patch("/tasks/{task_id}/regenerate", response_model=TaskResponse)

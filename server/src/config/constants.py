@@ -51,9 +51,3 @@ USGS_ENDPOINT = os.getenv("USGS_ENDPOINT")
 # SQLALCHEMY_DATABASE_URL
 # ============================
 SQLALCHEMY_DATABASE_URL = os.getenv("SQLALCHEMY_DATABASE_URL")
-
-
-# ============================
-# TEST
-# ============================
-TEST_EVENTID = os.getenv("TEST_EVENTID")

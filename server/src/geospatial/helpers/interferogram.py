@@ -38,10 +38,7 @@ def _generate_interferogram(params, product="3s"):
 
     Parameters:
     - params (dict): Parameters including epicenters, resolution, orbit, polarization, and ASF-specific parameters.
-    - credentials (dict): Authentication credentials for data access.
-    - workdir (str): Working directory for intermediate files.
-    - datadir (str): Directory for downloaded data.
-    - outputdir (str): Directory for saving outputs.
+    - product (str): Directory for saving outputs.
 
     Returns:
     - str: Path to the saved interferogram image.
@@ -99,15 +96,13 @@ def _generate_interferogram(params, product="3s"):
         SUBSWATH,
         startdate,
         enddate,
+        eventid=eventid,
     )
     aoi = aoi_gdf.unary_union.minimum_rotated_rectangle
     print(f"aoi: {aoi} type: {type(aoi)}")
 
     logger.print_log("info", "Downloading Tiles")
-    if product:
-        Tiles().download_dem(aoi, filename=dem, product=product)
-    else:
-        Tiles().download_dem(aoi, filename=dem)
+    Tiles().download_dem(aoi, filename=dem, product=product)
 
     if "client" in globals():
         client.close()
@@ -139,7 +134,7 @@ def _generate_interferogram(params, product="3s"):
 
     logger.print_log("info", "Processing geocode")
     # sbas.compute_geocode(RESOLUTION)  # turkey
-    sbas.compute_geocode()
+    sbas.compute_geocode(RESOLUTION)
     pairs = [sbas.to_dataframe().index.unique()]
 
     logger.print_log("info", "Processing topo")
@@ -166,7 +161,7 @@ def _generate_interferogram(params, product="3s"):
 
     logger.print_log("info", "Processing decimator")
     # decimator = sbas.decimator(resolution=RESOLUTION, grid=intf)
-    decimator = sbas.decimator()
+    decimator = sbas.decimator(resolution=RESOLUTION, grid=intf)
 
     logger.print_log("info", "Processing phase and correlation")
     tqdm_dask(
@@ -248,7 +243,7 @@ def generate_interferogram(taskid: str):
             "enddate": task.enddate,
             "eventdate": task.eventdate,
         }
-        print(params)
+        logger.print_log("info", f"params: {params}")
 
         result = _generate_interferogram(params)
         logger.print_log("info", f"Generated interferogram saved at: {result}")
