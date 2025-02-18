@@ -30,7 +30,7 @@ def get_tasks(
     if userid:
         query = query.filter(Task.userid == userid)
     if eventid:
-        query = query.filter(Task.eventtype == eventid)
+        query = query.filter(Task.eventid == eventid)
     if latitude:
         query = query.filter(Task.latitude == latitude)
     if longitude:
@@ -51,3 +51,10 @@ def update_task_status(db: Session, task_id: int, status: str):
         db.commit()
         db.refresh(task)
     return task
+
+
+def delete_task(db: Session, task_id: int):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if task:
+        db.delete(task)
+        db.commit()

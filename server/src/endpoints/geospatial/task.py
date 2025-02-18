@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from src.database import get_db
 from src.utils.logger import logger
 from src.schemas.task import TaskResponse
-from src.crud.task import get_tasks, update_task_status
+from src.crud.task import get_tasks, delete_task
 from src.geospatial.helpers.interferogram import generate_interferogram
 
 router = APIRouter()
@@ -23,25 +23,40 @@ def get_tasks_endpoint(
 ):
     try:
         tasks = get_tasks(db, ukey=ukey)
-        if not tasks:
-            raise HTTPException(status_code=404, detail="No tasks found")
-        return tasks
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+    return tasks
 
 
-@router.get("/tasks/{task_id}/status", response_model=TaskResponse)
-def get_task_status(
+@router.delete("/tasks/{task_id}/")
+async def delete_task_endpoint(
     task_id: int,
     db: Session = Depends(get_db),
 ):
     try:
-        tasks = get_tasks(db, taskid=task_id)
-        if not tasks:
-            raise HTTPException(status_code=404, detail="Task not found")
-        return tasks[0]
+        delete_task(db, task_id=task_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting task: {str(e)}")
+    return {"success": True}
+
+
+@router.get("/tasks/{task_or_event_id}/status", response_model=str)
+def get_task_status_endpoint(
+    task_or_event_id: str,
+    db: Session = Depends(get_db),
+):
+    try:
+        tasks = get_tasks(db, taskid=task_or_event_id)
+        if not tasks:
+            tasks = get_tasks(db, eventid=task_or_event_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error getting task status: {str(e)}"
+        )
+
+    if not tasks:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return tasks[0].status
 
 
 @router.patch("/tasks/{task_id}/regenerate", response_model=TaskResponse)

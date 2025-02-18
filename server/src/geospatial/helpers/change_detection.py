@@ -1,41 +1,93 @@
 import os
-import psutil
+import time
+import shutil
 import argparse
 
+import psutil
+import dask
 import numpy as np
+import pandas as pd
 import geopandas as gpd
 import osmnx as ox
 import rasterio
 from rasterio.features import shapes
 from shapely.geometry import shape, Point
-import pandas as pd
-from pygmtsar import Stack, Tiles, S1
 from dask.distributed import Client
+
+from src.geospatial.lib.pygmtsar import Stack, Tiles
 
 from src.database import get_db
 from src.crud.task import get_tasks
 from src.geospatial.helpers.asf import process_asf_params
+from src.geospatial.io.downloader.asf_client import download_data
+from src.geospatial.helpers.data_conversion import save_npy_to_tif
+from src.utils.logger import logger
 from src.config import (
-    AWS_PROCESSED_FOLDER,
     RESOLUTION,
     OUTPUT,
     DATADIR,
     WORKDIR,
     ASF_USERNAME,
     ASF_PASSWORD,
+    WAVELENGTH,
+    COARSEN,
+    SUBSWATH,
 )
-from src.geospatial.io.downloader.asf_client import download_data
-from src.utils.logger import logger
-from src.geospatial.helpers.data_conversion import save_npy_to_png, save_npy_to_tif
 
 
-def change_detection(params, product="3s"):
+def visualize_and_save_change_map(change_map_dB, output_filepath, vmin=-5, vmax=5):
+    """
+    Visualize the change map and save it as a PNG file.
+
+    Parameters:
+    - change_map_dB (np.ndarray): The change map (in dB) to visualize.
+    - output_filepath (str): Path to save the output PNG image.
+    - vmin (float): Minimum value for colormap scaling.
+    - vmax (float): Maximum value for colormap scaling.
+    """
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+    cax = ax.imshow(change_map_dB, cmap="RdBu", vmin=vmin, vmax=vmax)
+    cbar = plt.colorbar(cax, ax=ax, orientation="vertical")
+    cbar.set_label("Change (dB)", rotation=270, labelpad=20)
+    ax.set_title("Change Map (Sentinel-1)", fontsize=16)
+    ax.set_xlabel("Longitude", fontsize=12)
+    ax.set_ylabel("Latitude", fontsize=12)
+    plt.tight_layout()
+    plt.savefig(output_filepath, format="png")
+    plt.close()
+
+
+def _generate_change_detection(params, product="3s"):
+    """
+    Generate and process change detection using Sentinel-1 data.
+
+    Parameters:
+    - params (dict): Parameters including epicenters, resolution, orbit, polarization, and ASF-specific parameters.
+    - product (str): Directory for saving outputs.
+
+    Returns:
+    - str: Path to the saved interferogram image.
+    """
+
     eventid = params.get("eventid")
     eventtype = params.get("eventtype")
 
     outputdir = os.path.join(OUTPUT, eventtype, eventid)
     datadir = os.path.join(DATADIR, eventtype)
     workdir = os.path.join(WORKDIR, eventtype)
+
+    # the downloaded data size uses lots of space so delete
+    # existing data before running interferogram
+    logger.print_log("info", "Emptying data directory")
+    if os.path.exists(datadir):
+        time.sleep(1)
+        shutil.rmtree(datadir)
+
+    if os.path.exists(workdir):
+        time.sleep(1)
+        shutil.rmtree(workdir)
 
     os.makedirs(outputdir, exist_ok=True)
     os.makedirs(datadir, exist_ok=True)
@@ -48,12 +100,7 @@ def change_detection(params, product="3s"):
     asf_params = process_asf_params(params)
     flight_direction = asf_params.get("flightDirection")
 
-    orbit = None
-    if flight_direction == "Descending":
-        orbit = "D"
-    wavelength = 200
-    coarsen = (1, 4)
-    subswaths = 123
+    orbit = "D" if flight_direction == "Descending" else None
 
     dem = f"{datadir}/dem.nc"
     eventid = params.get("eventid")
@@ -66,45 +113,42 @@ def change_detection(params, product="3s"):
     epicenter = Point(longitude, latitude)
 
     logger.print_log("info", "Downloading Data")
-    S1, aoi = download_data(
+    S1, aoi_gdf = download_data(
         epicenter,
         eventdate,
         workdir,
         datadir,
         credentials,
         asf_params,
-        subswaths,
+        SUBSWATH,
         startdate,
         enddate,
+        eventid=eventid,
     )
-    aoi = S1.scan_slc(datadir)
-    logger.print_log("info", f"AOI {aoi}, type: {type(aoi)}")
+    aoi = aoi_gdf.unary_union.minimum_rotated_rectangle
+    print(f"aoi: {aoi} type: {type(aoi)}")
 
     logger.print_log("info", "Downloading Tiles")
-    if product:
-        Tiles().download_dem(aoi, filename=dem, product=product)
-    else:
-        Tiles().download_dem(aoi, filename=dem)
+    Tiles().download_dem(aoi, filename=dem, product=product)
 
     if "client" in globals():
         client.close()
+
+    dask.config.set({"logging.distributed": "info"})
 
     client = Client(
         n_workers=max(1, psutil.cpu_count() // 4),
         threads_per_worker=min(4, psutil.cpu_count()),
         memory_limit=max(4e9, psutil.virtual_memory().available),
     )
-    slc_params = {
-        "datadir": datadir,
-        # "orbit": orbit,
-        "subswath": subswaths,
-    }
+    logger.print_log("info", "Dask Client dashboard: %s", client.dashboard_link)
+
+    slc_params = {"datadir": datadir, "orbit": orbit, "subswath": SUBSWATH}
     slc_params = {key: value for key, value in slc_params.items() if value is not None}
     logger.print_log("info", f"slc params: {slc_params}")
     scenes = S1.scan_slc(**slc_params)
 
     sbas = Stack(workdir, drop_if_exists=True).set_scenes(scenes)
-    print(sbas.__dict__)
 
     logger.print_log("info", "Processing reframe")
     sbas.compute_reframe(aoi)
@@ -116,12 +160,13 @@ def change_detection(params, product="3s"):
     sbas.compute_align()
 
     logger.print_log("info", "Processing geocode")
-    sbas.compute_geocode(RESOLUTION)
+    sbas.compute_geocode()
 
     logger.print_log("info", "Processing topo")
+    sbas.get_topo()
     data = sbas.open_data()
     intensity = sbas.multilooking(
-        np.square(np.abs(data)), wavelength=wavelength, coarsen=coarsen
+        np.square(np.abs(data)), wavelength=WAVELENGTH, coarsen=COARSEN
     )
 
     intensity_dB_before = 10 * np.log10(np.abs(intensity[0]) + 1e-10)
@@ -315,7 +360,7 @@ def main(taskid: str):
         }
         print(params)
 
-        result = change_detection(params)
+        result = _generate_change_detection(params)
         logger.print_log("info", f"Generated interferogram saved at: {result}")
     except Exception as e:
         logger.print_log(
