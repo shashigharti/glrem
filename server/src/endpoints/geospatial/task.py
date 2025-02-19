@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
@@ -40,7 +41,7 @@ async def delete_task_endpoint(
     return {"success": True}
 
 
-@router.get("/tasks/{task_or_event_id}/status", response_model=str)
+@router.get("/tasks/{task_or_event_id}/status")
 def get_task_status_endpoint(
     task_or_event_id: str,
     db: Session = Depends(get_db),
@@ -56,7 +57,7 @@ def get_task_status_endpoint(
 
     if not tasks:
         raise HTTPException(status_code=404, detail="Task not found")
-    return tasks[0].status
+    return JSONResponse(status_code=200, content={"detail": tasks[0].status})
 
 
 @router.patch("/tasks/{task_id}/regenerate", response_model=TaskResponse)
