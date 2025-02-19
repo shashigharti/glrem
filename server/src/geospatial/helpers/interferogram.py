@@ -133,8 +133,7 @@ def _generate_interferogram(params, product="3s"):
     sbas.compute_align()
 
     logger.print_log("info", "Processing geocode")
-    # sbas.compute_geocode(RESOLUTION)  # turkey
-    sbas.compute_geocode(RESOLUTION)
+    sbas.compute_geocode()
     pairs = [sbas.to_dataframe().index.unique()]
 
     logger.print_log("info", "Processing topo")
@@ -160,8 +159,7 @@ def _generate_interferogram(params, product="3s"):
     intf = sbas.interferogram(phase_goldstein)
 
     logger.print_log("info", "Processing decimator")
-    # decimator = sbas.decimator(resolution=RESOLUTION, grid=intf)
-    decimator = sbas.decimator(resolution=RESOLUTION, grid=intf)
+    decimator = sbas.decimator()
 
     logger.print_log("info", "Processing phase and correlation")
     tqdm_dask(

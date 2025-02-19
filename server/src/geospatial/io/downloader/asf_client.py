@@ -73,7 +73,12 @@ def download_data(
 
     logger.print_log("info", f"Downloading Orbits")
     S1.download_orbits(datadir, S1.scan_slc(datadir))
-    aoi = S1.scan_slc(datadir)
+    # aoi = S1.scan_slc(datadir)
+    import geopandas as gpd
+    from shapely import wkt
+
+    aoi_geom = wkt.loads(AOI.get(eventid))
+    aoi = gpd.GeoDataFrame({"geometry": [aoi_geom]}, crs="EPSG:4326")
 
     return S1, aoi
 
