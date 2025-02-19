@@ -8,6 +8,8 @@
 # Licensed under the BSD 3-Clause License (see LICENSE for details)
 # ----------------------------------------------------------------------------
 
+from src.geospatial.lib.pygmtsar.config import env
+
 
 class PRM_gmtsar:
 
@@ -38,7 +40,6 @@ class PRM_gmtsar:
         import subprocess
         import os
         from src.geospatial.lib.pygmtsar import PRM
-        from src.geospatial.lib.pygmtsar.config import env
 
         cwd = os.path.dirname(self.filename) if self.filename is not None else "."
         p = subprocess.Popen(
@@ -117,6 +118,7 @@ class PRM_gmtsar:
             pass_fds=[pipe1[0], pipe2[0]],
             cwd=cwd,
             encoding="utf8",
+            env=env,
         )
         stdout_data, stderr_data = p.communicate()
         # print ('stdout_data', stdout_data)
@@ -224,6 +226,7 @@ class PRM_gmtsar:
             pass_fds=[pipe[0]],
             cwd=cwd,
             bufsize=10 * 1000 * 1000,
+            env=env,
         )
         stdout_data, stderr_data = p.communicate(input=stdin_data)
 
@@ -318,6 +321,7 @@ class PRM_gmtsar:
             pass_fds=[pipe[0]],
             cwd=cwd,
             bufsize=10 * 1000 * 1000,
+            env=env,
         )
         stdout_data, stderr_data = p.communicate(input=stdin_data)
 
