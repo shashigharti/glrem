@@ -7,7 +7,7 @@ from src.utils.logger import log_data, logger
 
 
 @log_data
-def upload_file(filepath_src, filename_dest):
+def upload_file(filepath_src, filename_dest, content_type="image/png"):
     s3 = boto3.client(
         "s3",
         aws_access_key_id=AWS_ACCESS_KEY,
@@ -15,7 +15,12 @@ def upload_file(filepath_src, filename_dest):
     )
 
     try:
-        s3.upload_file(filepath_src, AWS_BUCKET_NAME, filename_dest)
+        s3.upload_file(
+            filepath_src,
+            AWS_BUCKET_NAME,
+            filename_dest,
+            ExtraArgs={"ContentType": content_type},
+        )
         logger.print_log(
             "info",
             f"Successfully uploaded {filepath_src} to s3://{AWS_BUCKET_NAME}/{filename_dest}",

@@ -13,7 +13,6 @@ def create_task(db: Session, task_data: dict):
 def get_tasks(
     db: Session,
     taskid: int = None,
-    ukey: str = None,
     userid: int = None,
     eventid: str = None,
     latitude: float = None,
@@ -25,8 +24,6 @@ def get_tasks(
     query = db.query(Task)
     if taskid:
         query = query.filter(Task.id == taskid)
-    if ukey:
-        query = query.filter(Task.ukey == ukey)
     if userid:
         query = query.filter(Task.userid == userid)
     if eventid:
@@ -44,8 +41,8 @@ def get_tasks(
     return query.all()
 
 
-def update_task_status(db: Session, task_id: int, status: str):
-    task = db.query(Task).filter(Task.id == task_id).first()
+def update_task_status(db: Session, taskid: int, status: str):
+    task = db.query(Task).filter(Task.id == taskid).first()
     if task:
         task.status = status
         db.commit()
@@ -53,8 +50,8 @@ def update_task_status(db: Session, task_id: int, status: str):
     return task
 
 
-def delete_task(db: Session, task_id: int):
-    task = db.query(Task).filter(Task.id == task_id).first()
+def delete_task(db: Session, eventid: str):
+    task = db.query(Task).filter(Task.eventid == eventid).first()
     if task:
         db.delete(task)
         db.commit()

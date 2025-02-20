@@ -60,6 +60,7 @@ osmnx = "^2.0.1"
 pytest-mock = "^3.14.0"
 tqdm-joblib = "^0.0.4"
 prefect = "^3.2.1"
+geopy = "^2.4.1"
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.3.3"

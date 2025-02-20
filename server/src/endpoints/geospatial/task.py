@@ -19,37 +19,35 @@ class UpdateTaskStatusRequest(BaseModel):
 
 @router.get("/tasks", response_model=List[TaskResponse])
 def get_tasks_endpoint(
-    ukey: Optional[str] = None,
+    userid: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     try:
-        tasks = get_tasks(db, ukey=ukey)
+        tasks = get_tasks(db, userid=userid)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
     return tasks
 
 
-@router.delete("/tasks/{task_id}/")
+@router.delete("/tasks/{eventid}/")
 async def delete_task_endpoint(
-    task_id: int,
+    eventid: str,
     db: Session = Depends(get_db),
 ):
     try:
-        delete_task(db, task_id=task_id)
+        delete_task(db, eventid=eventid)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting task: {str(e)}")
     return {"success": True}
 
 
-@router.get("/tasks/{task_or_event_id}/status")
+@router.get("/tasks/{eventid}/status")
 def get_task_status_endpoint(
-    task_or_event_id: str,
+    eventid: str,
     db: Session = Depends(get_db),
 ):
     try:
-        tasks = get_tasks(db, taskid=task_or_event_id)
-        if not tasks:
-            tasks = get_tasks(db, eventid=task_or_event_id)
+        tasks = get_tasks(db, eventid=eventid)
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error getting task status: {str(e)}"
@@ -57,10 +55,10 @@ def get_task_status_endpoint(
 
     if not tasks:
         raise HTTPException(status_code=404, detail="Task not found")
-    return JSONResponse(status_code=200, content={"detail": tasks[0].status})
+    return JSONResponse(status_code=200, content={"status": tasks[0].status})
 
 
-@router.patch("/tasks/{task_id}/regenerate", response_model=TaskResponse)
+@router.post("/tasks/{taskid}/regenerate", response_model=TaskResponse)
 def regenerate_task_endpoint(
     taskid: int,
     db: Session = Depends(get_db),
@@ -76,15 +74,15 @@ def regenerate_task_endpoint(
         logger.print_log("info", f"Triggered interferogram processing.")
         generate_interferogram(task.id)
 
-        return {
-            "success": True,
-            "status": "processing",
-            "task_id": task.id,
-            "filename": task.filename,
-        }
-
     except Exception as e:
         logger.print_log(
             "error", f"Error generating interferogram: {str(e)}", exc_info=True
         )
         raise HTTPException(status_code=500, detail="Error generating interferogram.")
+
+    return {
+        "success": True,
+        "status": "processing",
+        "task_id": task.id,
+        "filename": task.filename,
+    }

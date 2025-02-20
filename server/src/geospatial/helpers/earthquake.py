@@ -1,5 +1,5 @@
 from datetime import timedelta
-from src.apis.usgs.connection import fetch_shakemap_data
+from src.apis.usgs.earthquake import fetch_shakemap_data
 
 
 def get_daterange(eventdate, days_before=10, days_after=10):
@@ -8,19 +8,13 @@ def get_daterange(eventdate, days_before=10, days_after=10):
 
     Parameters
     ----------
-    eventdate : date
-        The date of the event in "YYYY-MM-DD" format.
-    days_before : int, optional
-        The number of days before the event to include in the range (default is 10).
-    days_after : int, optional
-        The number of days after the event to include in the range (default is 10).
+    - eventdate (date) : The date of the event in "YYYY-MM-DD" format.
+    - days_before (int, optional) : The number of days before the event to include in the range (default is 10).
+    - days_after (int, optional) : The number of days after the event to include in the range (default is 10).
 
     Returns
     -------
-    dict
-        A dictionary with two keys:
-        - 'startdate': The calculated start date in "YYYY-MM-DDTHH:MM:SSZ" format.
-        - 'enddate': The calculated end date in "YYYY-MM-DDTHH:MM:SSZ" format.
+    - dict (dict) : A dictionary with startdate and enddate in "YYYY-MM-DDTHH:MM:SSZ" format.
     """
 
     start_date = eventdate - timedelta(days=days_before)

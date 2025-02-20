@@ -6,9 +6,10 @@ import argparse
 
 import numpy as np
 import dask
+from fastapi import Depends
 from dask.distributed import Client
 from shapely.geometry import Point
-from src.geospatial.lib.pygmtsar import Stack, tqdm_dask, Tiles
+from sqlalchemy.orm import Session
 
 from src.config import (
     RESOLUTION,
@@ -24,12 +25,17 @@ from src.config import (
     SUBSWATH,
 )
 from src.database import get_db
-from src.crud.task import get_tasks, update_task_status
-from src.geospatial.io.uploader.s3_client import copy_files_to_s3
 from src.utils.logger import logger
+from src.crud.task import get_tasks, update_task_status
+from src.geospatial.lib.pygmtsar import Stack, tqdm_dask, Tiles
+from src.geospatial.io.uploader.s3_client import copy_files_to_s3
 from src.geospatial.io.downloader.asf_client import download_data
 from src.geospatial.helpers.data_conversion import save_xarray_to_png
 from src.geospatial.helpers.asf import process_asf_params
+
+
+def generate_filename(eventid, eventtype, analysis):
+    return f"{eventtype}-{eventid}-{analysis}.png"
 
 
 def _generate_interferogram(params, product="3s"):
@@ -246,10 +252,10 @@ def generate_interferogram(taskid: str):
         result = _generate_interferogram(params)
         logger.print_log("info", f"Generated interferogram saved at: {result}")
 
-        update_task_status(db=db_session, task_id=task.id, status="completed")
+        update_task_status(db=db_session, taskid=task.id, status="completed")
         logger.print_log("info", "Task updated successfully.")
     except Exception as e:
-        update_task_status(db=db_session, task_id=task.id, status="error")
+        update_task_status(db=db_session, taskid=task.id, status="error")
         logger.print_log(
             "error", f"Error generating interferogram: {str(e)}", exc_info=True
         )

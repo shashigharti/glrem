@@ -1,48 +1,54 @@
-import io
 import os
-import base64
+import io
 import json
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
+import base64
 import botocore
 
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy.orm import Session
+
+from src.database import get_db
+from src.crud.task import get_tasks
 from src.config import AWS_BUCKET_NAME, s3_client, AWS_PROCESSED_FOLDER
+from src.geospatial.helpers.interferogram import generate_filename
 
 router = APIRouter()
 
 
 @router.get("/tiles")
-async def get_tile(eventid: str, z: int, x: int, y: int):
+async def get_tiles_endpoint(eventid: str, z: int, x: int, y: int):
     s3_key = os.path.join(AWS_PROCESSED_FOLDER, eventid, "tiles", f"{z}/{x}/{y}.png")
     print(s3_key)
 
     try:
         tile_object = s3_client.get_object(Bucket=AWS_BUCKET_NAME, Key=s3_key)
         tile_data = tile_object["Body"].read()
-        return StreamingResponse(io.BytesIO(tile_data), media_type="image/png")
 
-    except s3_client.exceptions.NoSuchKey:
-        raise HTTPException(status_code=404, detail="Tile not found")
-    except botocore.exceptions.ClientError as e:
-        raise HTTPException(status_code=500, detail=f"Connection Error: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
-
-import os
-import json
-import base64
-import botocore
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
-
-router = APIRouter()
+    return StreamingResponse(io.BytesIO(tile_data), media_type="image/png")
 
 
-@router.get("/get-files")
-async def get_files(filename: str, eventid: str, responsetype: str = "url"):
+@router.get("/files")
+async def get_files_endpoint(
+    eventid: str,
+    ext: str = ".png",
+    responsetype: str = "url",
+    db: Session = Depends(get_db),
+):
+    tasks = get_tasks(db, eventid=eventid)
+    if not tasks:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    task = tasks[0]
+    name = generate_filename(task.eventtype, eventid, task.analysis)
+    filename = f"{name}.{ext}"
     try:
-        image_file_key = os.path.join(AWS_PROCESSED_FOLDER, eventid, f"{filename}.png")
+        image_file_key = os.path.join(
+            AWS_PROCESSED_FOLDER, eventid, f"{filename}.{ext}"
+        )
         meta_file_key = os.path.join(
             AWS_PROCESSED_FOLDER, eventid, f"{filename}.geojson"
         )
@@ -63,16 +69,12 @@ async def get_files(filename: str, eventid: str, responsetype: str = "url"):
         png_data = png_object["Body"].read()
         png_base64 = base64.b64encode(png_data).decode("utf-8")
 
-        return JSONResponse(
-            content={
-                "png_base64": png_base64,
-                "geojson": json.loads(geojson_data),
-            }
-        )
-
-    except s3_client.exceptions.NoSuchKey:
-        raise HTTPException(status_code=404, detail="File not found")
-    except botocore.exceptions.ClientError as e:
-        raise HTTPException(status_code=500, detail=f"S3 Client Error: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+    return JSONResponse(
+        content={
+            "png_base64": png_base64,
+            "geojson": json.loads(geojson_data),
+        }
+    )
