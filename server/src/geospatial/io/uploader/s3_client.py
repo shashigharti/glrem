@@ -36,6 +36,7 @@ def upload_file(filepath_src, filename_dest, content_type="image/png"):
 def copy_files_to_s3(
     folder, dest="app-analyzed-data", file_types=["tif", "png", "nc", "vtx", "geojson"]
 ):
+    content_types = {"geojson": "application/geo+json", "png": "image/png"}
     for filename in os.listdir(folder):
         ext = filename.split(".")[-1].lower()
         if ext in file_types:
@@ -45,4 +46,4 @@ def copy_files_to_s3(
             logger.print_log(
                 "info", f"Uploading file:{filename_src} to {filename_dest}"
             )
-            upload_file(filename_src, filename_dest)
+            upload_file(filename_src, filename_dest, content_types[ext])

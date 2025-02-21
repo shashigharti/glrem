@@ -35,7 +35,7 @@ from src.geospatial.helpers.asf import process_asf_params
 
 
 def generate_filename(eventid, eventtype, analysis):
-    return f"{eventtype}-{eventid}-{analysis}.png"
+    return f"{eventtype}-{eventid}-{analysis}"
 
 
 def _generate_interferogram(params, product="3s"):
@@ -52,6 +52,7 @@ def _generate_interferogram(params, product="3s"):
 
     eventid = params.get("eventid")
     eventtype = params.get("eventtype")
+    filename = params.get("filename")
 
     outputdir = os.path.join(OUTPUT, eventtype, eventid)
     datadir = os.path.join(DATADIR, eventtype)
@@ -176,7 +177,7 @@ def _generate_interferogram(params, product="3s"):
 
     intf_ll = sbas.ra2ll(intf)
     logger.print_log("info", "Saving interferogram")
-    filepath_intf_png = os.path.join(outputdir, f"{eventid}-earthquake-intf.png")
+    filepath_intf_png = os.path.join(outputdir, f"{filename}.png")
     save_xarray_to_png(intf_ll, filepath_intf_png)
 
     # TODO: it will be used later.
@@ -246,6 +247,7 @@ def generate_interferogram(taskid: str):
             "startdate": task.startdate,
             "enddate": task.enddate,
             "eventdate": task.eventdate,
+            "filename": task.filename,
         }
         logger.print_log("info", f"params: {params}")
 

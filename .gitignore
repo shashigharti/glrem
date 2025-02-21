@@ -1,4 +1,4 @@
 # Data
 data/
 guardian.db
-server/scripts/add_task.py
+server/scripts/update_task.py

@@ -47,16 +47,18 @@ async def generate_interferogram_endpoint(
     )
     eventdetails["status"] = "processing"
 
-    filename = generate_filename(eventid, "earthquake", "inteferogram")
+    analysis = "interferogram"
+    eventtype = "earthquake"
+    filename = generate_filename(eventid, eventtype, analysis)
     eventdetails["filename"] = filename
-    eventdetails["analysis"] = "interferogram"
+    eventdetails["analysis"] = analysis
 
     existing_tasks = get_tasks(
         db=db,
         latitude=latitude,
         longitude=longitude,
-        eventtype="earthquake",
-        analysis="interferogram",
+        eventtype=eventtype,
+        analysis=analysis,
     )
 
     if existing_tasks:

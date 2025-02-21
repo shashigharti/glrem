@@ -34,7 +34,7 @@ async def get_tiles_endpoint(eventid: str, z: int, x: int, y: int):
 @router.get("/files")
 async def get_files_endpoint(
     eventid: str,
-    ext: str = ".png",
+    ext: str = "png",
     responsetype: str = "url",
     db: Session = Depends(get_db),
 ):
@@ -43,14 +43,12 @@ async def get_files_endpoint(
         raise HTTPException(status_code=404, detail="File not found")
 
     task = tasks[0]
-    name = generate_filename(task.eventtype, eventid, task.analysis)
-    filename = f"{name}.{ext}"
     try:
         image_file_key = os.path.join(
-            AWS_PROCESSED_FOLDER, eventid, f"{filename}.{ext}"
+            AWS_PROCESSED_FOLDER, eventid, f"{task.filename}.{ext}"
         )
         meta_file_key = os.path.join(
-            AWS_PROCESSED_FOLDER, eventid, f"{filename}.geojson"
+            AWS_PROCESSED_FOLDER, eventid, f"{task.filename}.geojson"
         )
         geojson_object = s3_client.get_object(Bucket=AWS_BUCKET_NAME, Key=meta_file_key)
         geojson_data = geojson_object["Body"].read().decode("utf-8")
