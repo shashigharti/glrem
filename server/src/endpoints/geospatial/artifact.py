@@ -2,7 +2,6 @@ import os
 import io
 import json
 import base64
-import botocore
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -11,7 +10,6 @@ from sqlalchemy.orm import Session
 from src.database import get_db
 from src.crud.task import get_tasks
 from src.config import AWS_BUCKET_NAME, s3_client, AWS_PROCESSED_FOLDER
-from src.geospatial.helpers.interferogram import generate_filename
 
 router = APIRouter()
 

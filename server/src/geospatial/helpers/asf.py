@@ -1,20 +1,25 @@
+import os
 import datetime
-import asf_search as asf
+import pandas as pd
 import geopandas as gpd
-from shapely import wkt
-from shapely.ops import unary_union
-from shapely.geometry import Polygon, box
+import asf_search as asf
 
-from src.geospatial.helpers.earthquake import get_aoi
+from shapely.ops import unary_union
+from shapely.geometry import Polygon
+from sentinelsat import read_geojson, geojson_to_wkt
+
 from src.config import (
     DATA_PLATFORM,
     PROCESSING_LEVEL,
     BEAM_MODE,
+    OUTPUT,
+    SCENES_FILENAME,
 )
 from src.utils.logger import logger
+from src.geospatial.helpers.scene_selection import find_matching_scenes, generate_aoi
 
 
-def get_burst_or_scene(params, eventdate, startdate, enddate, epicenter, aoi=None):
+def get_burst_or_scene(params, eventdate, startdate, enddate, crs="EPSG:4326"):
     """
     Fetches Sentinel-1 images based on an earthquake epicenter and a specified date range.
 
@@ -23,53 +28,54 @@ def get_burst_or_scene(params, eventdate, startdate, enddate, epicenter, aoi=Non
     - eventdate (str): Date of the earthquake event in "YYYY-MM-DD" format.
     - startdate (str): Start date of the image search period in "YYYY-MM-DD" format.
     - enddate (str): End date of the image search period in "YYYY-MM-DD" format.
-    - epicenter (shapely.geometry.Point): Coordinates (latitude and longitude) of the earthquake epicenter.
-    - aoi (shapely.geometry.Polygon, optional): Area of Interest (AOI) to filter the images. Defaults to None.
 
     Returns:
     - list: A list of scene IDs for images that intersect with the AOI, covering the earthquake event within the specified date range.
     """
-
-    if not aoi:
-        width = 2.7
-        height = 2.7
-        logger.print_log("info", f"epicenter:{epicenter}")
-
-        aoi = box(
-            epicenter.x - width / 2,
-            epicenter.y - height / 2,
-            epicenter.x + width / 2,
-            epicenter.y + height / 2,
-        )
-
-        aoi_gdf = gpd.GeoSeries([aoi], crs="EPSG:4326")
-
-    if isinstance(aoi, str):
-        aoi = wkt.loads(aoi)
-
-    params = {**params, "intersectsWith": aoi.wkt}
-    params.update({"start": startdate, "end": enddate})
-    aoi_gdf = gpd.GeoDataFrame({"geometry": [aoi]}, crs="EPSG:4326")
     logger.print_log("info", params)
+
+    selected_scenes = []
+    aoi_path = os.path.join(OUTPUT, "aois")
+    tmpscenes_path = os.path.join(OUTPUT, SCENES_FILENAME)
+
+    # generate aoi
+    aoi_path = generate_aoi(params["eventid"])
+
+    # load aoi
+    footprint = geojson_to_wkt(read_geojson(aoi_path))
+    params = {**params, "intersectsWith": footprint.wkt}
+    params.update({"start": startdate, "end": enddate})
+    aoi_gdf = gpd.GeoDataFrame({"geometry": [footprint]}, crs)
 
     results = asf.search(**params)
     if not results:
         return []
 
+    # process scenes
     scenes_df = _process_scenes(results, eventdate)
-    selected_scenes_pre_event, aoi_pre = _find_best_overlapping_scenes(
-        scenes_df, aoi_gdf, eventdate, snapshot_time="pre"
-    )
-    logger.print_log("info", f"Pre event scenes: {selected_scenes_pre_event}")
 
-    selected_scenes_post_event, aoi_post = _find_best_overlapping_scenes(
+    # find post event scenes overlapping with AOI
+    selected_scenes_pre_event, _ = _find_best_overlapping_scenes(
         scenes_df, aoi_gdf, eventdate, snapshot_time="post"
     )
-    logger.print_log("info", f"Post event scenes: {selected_scenes_post_event}")
-    combined_scenes = selected_scenes_pre_event + selected_scenes_post_event
+    logger.print_log("info", f"Post event scenes: {selected_scenes_pre_event}")
+    scenes_df = pd.DataFrame(
+        [
+            scene.properties
+            for scene in results
+            if scene.properties.fileId in selected_scenes_pre_event
+        ]
+    )
+    scenes_df.to_csv(tmpscenes_path)
 
-    # TODO: Check the overlap between pre and post scene AOI
-    return combined_scenes
+    # find matching scenes based on perpendicular and temporal baseline
+    selected_scenes_df = find_matching_scenes(selected_scenes_pre_event)
+    selected_scenes = [
+        scene["MatchID"]
+        for scene in selected_scenes_df.iterrows()
+        if scene["ReferenceID"] in selected_scenes_pre_event
+    ]
+    return selected_scenes
 
 
 def _find_best_overlapping_scenes(scenes_gdf, aoi_gdf, event_date, snapshot_time="pre"):

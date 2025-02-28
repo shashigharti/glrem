@@ -1633,6 +1633,21 @@ files = [
 ]
 
 [[package]]
+name = "geomet"
+version = "1.1.0"
+description = "Pure Python conversion library for common geospatial data formats"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "geomet-1.1.0-py3-none-any.whl", hash = "sha256:4372fe4e286a34acc6f2e9308284850bd8c4aa5bc12065e2abbd4995900db12f"},
+    {file = "geomet-1.1.0.tar.gz", hash = "sha256:51e92231a0ef6aaa63ac20c443377ba78a303fd2ecd179dc3567de79f3c11605"},
+]
+
+[package.dependencies]
+click = "*"
+
+[[package]]
 name = "geopandas"
 version = "1.0.1"
 description = "Geographic pandas extensions"
@@ -1896,6 +1911,17 @@ groups = ["main"]
 files = [
     {file = "hpack-4.1.0-py3-none-any.whl", hash = "sha256:157ac792668d995c657d93111f46b4535ed114f0c9c8d672271bbec7eae1b496"},
     {file = "hpack-4.1.0.tar.gz", hash = "sha256:ec5eca154f7056aa06f196a557655c5b009b382873ac8d1e66e79e87535f1dca"},
+]
+
+[[package]]
+name = "html2text"
+version = "2024.2.26"
+description = "Turn HTML into equivalent Markdown-structured text."
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "html2text-2024.2.26.tar.gz", hash = "sha256:05f8e367d15aaabc96415376776cdd11afd5127a77fce6e36afc60c563ca2c32"},
 ]
 
 [[package]]
@@ -5607,6 +5633,29 @@ docs = ["ipykernel", "nbconvert", "numpydoc", "pydata_sphinx_theme (==0.10.0rc2)
 stats = ["scipy (>=1.7)", "statsmodels (>=0.12)"]
 
 [[package]]
+name = "sentinelsat"
+version = "1.2.1"
+description = "Utility to search and download Copernicus Sentinel satellite images"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "sentinelsat-1.2.1-py3-none-any.whl", hash = "sha256:0f05dd2b75e2d056a92187e8685589f1f9b96a73c18fc0231dcc5e3fc8249760"},
+    {file = "sentinelsat-1.2.1.tar.gz", hash = "sha256:d38de0ae1e167d7311426973b0207380e9fa1c4a6f5353dc58bd83bf88b5db4d"},
+]
+
+[package.dependencies]
+click = ">=7.1"
+geojson = ">=2"
+geomet = "*"
+html2text = "*"
+requests = "*"
+tqdm = ">=4.58"
+
+[package.extras]
+dev = ["flaky", "geopandas", "pandas", "pytest (>=3.6.3)", "pytest-socket", "pytest-vcr", "pyyaml", "requests-mock", "rstcheck (<6)", "shapely", "sphinx (>=1.3)", "sphinx-rtd-theme"]
+
+[[package]]
 name = "shapely"
 version = "2.0.6"
 description = "Manipulation and analysis of geometric objects"
@@ -6968,4 +7017,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "b3d2bb19db041b91b7b35bee673ac7d5f687a62f143916012a6d4738b79d706a"
+content-hash = "4ec1a0b7f5c33c3e83fcf69251fbe39ff36c9ec64366b09ba7863006eb586962"

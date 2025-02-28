@@ -1,5 +1,6 @@
 import os
 import json
+import argparse
 import numpy as np
 from PIL import Image
 from osgeo import gdal
@@ -11,7 +12,7 @@ from rasterio.transform import from_origin, from_bounds
 
 def save_xarray_to_tif(data_array, tif_filepath):
     """
-    Save an xarray.DataArray to a GeoTIFF file.
+    Save an xarray.DataArray to a GeoTIFF file while preserving spatial reference.
 
     Parameters:
     - data_array: xarray.DataArray containing the data and coordinates.
@@ -21,6 +22,7 @@ def save_xarray_to_tif(data_array, tif_filepath):
     lat = data_array["lat"].values
     lon = data_array["lon"].values
 
+    crs = data_array.attrs.get("crs", "EPSG:4326")
     transform = from_origin(
         west=lon.min(),
         north=lat.max(),
@@ -35,10 +37,9 @@ def save_xarray_to_tif(data_array, tif_filepath):
         "width": data.shape[1],
         "height": data.shape[0],
         "count": 1,
-        "crs": "EPSG:4326",
+        "crs": crs,
         "transform": transform,
     }
-
     with rasterio.open(tif_filepath, "w", **profile) as dst:
         dst.write(data, 1)
 
@@ -151,8 +152,7 @@ def save_npy_to_png(
     return filepath, filepath_geojson
 
 
-def save_npy_to_tif(npy_file, bbox, tif_file, crs="EPSG:4326"):
-    data = np.load(npy_file)
+def save_npy_to_tif(data, bbox, tif_file, crs="EPSG:4326"):
     height, width = data.shape
     transform = from_bounds(*bbox, width, height)
 
@@ -229,3 +229,23 @@ def save_tif_to_png(filepath, dest):
         json.dump(geojson_data, f)
 
     return filepath_png, filepath_geojson
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Convert TIFF to PNG and generate GeoJSON metadata."
+    )
+    parser.add_argument("filepath", help="Path to the input TIFF file.")
+    parser.add_argument(
+        "dest", help="Destination directory for saving PNG and GeoJSON files."
+    )
+
+    args = parser.parse_args()
+    filepath_png, filepath_geojson = save_tif_to_png(args.filepath, args.dest)
+
+    print(f"PNG saved at: {filepath_png}")
+    print(f"GeoJSON saved at: {filepath_geojson}")
+
+
+if __name__ == "__main__":
+    main()

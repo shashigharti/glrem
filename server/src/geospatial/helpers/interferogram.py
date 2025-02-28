@@ -6,20 +6,16 @@ import argparse
 
 import numpy as np
 import dask
-from fastapi import Depends
 from dask.distributed import Client
 from shapely.geometry import Point
-from sqlalchemy.orm import Session
 
 from src.config import (
-    RESOLUTION,
     AWS_PROCESSED_FOLDER,
     OUTPUT,
     DATADIR,
     WORKDIR,
     ASF_USERNAME,
     ASF_PASSWORD,
-    POLARIZATION,
     WAVELENGTH,
     COARSEN,
     SUBSWATH,
@@ -32,10 +28,6 @@ from src.geospatial.io.uploader.s3_client import copy_files_to_s3
 from src.geospatial.io.downloader.asf_client import download_data
 from src.geospatial.helpers.data_conversion import save_xarray_to_png
 from src.geospatial.helpers.asf import process_asf_params
-
-
-def generate_filename(eventid, eventtype, analysis):
-    return f"{eventtype}-{eventid}-{analysis}"
 
 
 def _generate_interferogram(params, product="3s"):

@@ -11,32 +11,35 @@ from src.apis.usgs.earthquake import get_data, format_data
 from src.crud.task import create_task, get_tasks, update_task_status
 from src.geospatial.helpers.earthquake import get_daterange
 
-from src.geospatial.helpers.interferogram import generate_interferogram
+from src.geospatial.helpers.damage_assessment import (
+    damage_assessment,
+)
 
 router = APIRouter()
 
 
-class InterferogramRequest(BaseModel):
+class DamageAssessmentRequest(BaseModel):
     userid: str
     eventid: str
 
 
-@router.post("/interferogram")
-async def generate_interferogram_endpoint(
-    params: InterferogramRequest,
+@router.post("/damageassessment")
+async def generate_damage_assessment_endpoint(
+    params: DamageAssessmentRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db_session: Session = Depends(get_db),
 ):
     params_dict = params.model_dump()
     eventid = params_dict["eventid"]
-    eventdetails = format_data(get_data(params_dict["eventid"]))
+    eventdetails = format_data(get_data(eventid))
 
     eventdate = eventdetails.get("eventdate")
     latitude = eventdetails.get("latitude")
     longitude = eventdetails.get("longitude")
 
-    eventdetails = {**eventdetails, **params_dict}
+    eventdetails.update(params_dict)
     daterange = get_daterange(eventdate, 10, 10)
+
     eventdetails["startdate"] = datetime.strptime(
         daterange["startdate"], "%Y-%m-%dT%H:%M:%SZ"
     )
@@ -45,14 +48,14 @@ async def generate_interferogram_endpoint(
     )
     eventdetails["status"] = "processing"
 
-    analysis = "interferogram"
+    analysis = "damageassessment"
     eventtype = "earthquake"
     filename = generate_filename(eventid, eventtype, analysis)
     eventdetails["filename"] = filename
     eventdetails["analysis"] = analysis
 
     existing_tasks = get_tasks(
-        db=db,
+        db=db_session,
         latitude=latitude,
         longitude=longitude,
         eventtype=eventtype,
@@ -69,18 +72,20 @@ async def generate_interferogram_endpoint(
             "filename": filename,
         }
 
-    task = create_task(db=db, task_data=eventdetails)
+    task = create_task(db=db_session, task_data=eventdetails)
     logger.print_log("info", f"Task {task.id} created successfully.")
 
     try:
-        logger.print_log("info", f"Triggered interferogram processing.")
-        background_tasks.add_task(generate_interferogram, task.id)
+        logger.print_log("info", f"Triggered damage assessment processing.")
+        background_tasks.add_task(damage_assessment, task.id)
     except Exception as e:
-        update_task_status(db=db, taskid=task.id, status="error")
+        update_task_status(db=db_session, taskid=task.id, status="error")
         logger.print_log(
-            "error", f"Error generating interferogram: {str(e)}", exc_info=True
+            "error", f"Error generating damage assessment: {str(e)}", exc_info=True
         )
-        raise HTTPException(status_code=500, detail="Error generating interferogram.")
+        raise HTTPException(
+            status_code=500, detail="Error generating damage assessment."
+        )
 
     return {
         "success": True,

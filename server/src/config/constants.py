@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ============================
-# Default Constants
+# Interferogram Constants
 # ============================
 DATA_PLATFORM = ["Sentinel-1"]
 PROCESSING_LEVEL = ["SLC"]
@@ -13,8 +13,12 @@ BEAM_MODE = "IW"
 RESOLUTION = 200
 POLARIZATION = "VV"
 WAVELENGTH = 56
-COARSEN = (1, 4)
+COARSEN = (1, 8)
 SUBSWATH = 123
+PERP_BASELINE_MIN = 140
+PERP_BASELINE_MAX = 300
+TEMP_BASELINE = 60
+SCENES_FILENAME = "scenes.csv"
 
 # ============================
 # AWS Configuration
@@ -51,3 +55,9 @@ USGS_ENDPOINT = os.getenv("USGS_ENDPOINT")
 # SQLALCHEMY_DATABASE_URL
 # ============================
 SQLALCHEMY_DATABASE_URL = os.getenv("SQLALCHEMY_DATABASE_URL")
+
+# ============================
+# USGS
+# ============================
+USGS_ENDPOINT = os.getenv("USGS_ENDPOINT")
+USGS_SHAKEMAP = os.getenv("USGS_SHAKEMAP")

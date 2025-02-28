@@ -1,8 +1,9 @@
 import os
 import time
+import geopandas as gpd
+from shapely import wkt
+
 from src.geospatial.lib.pygmtsar import S1, Tiles
-
-
 from src.config.examples import AOI, SCENES
 from src.utils.logger import logger
 from src.geospatial.lib.asf import ASF
@@ -73,11 +74,10 @@ def download_data(
 
     logger.print_log("info", f"Downloading Orbits")
     S1.download_orbits(datadir, S1.scan_slc(datadir))
-    # aoi = S1.scan_slc(datadir)
-    import geopandas as gpd
-    from shapely import wkt
 
     aoi_geom = wkt.loads(AOI.get(eventid))
+    if not aoi_geom:
+        aoi_geom = S1.scan_slc(datadir)
     aoi = gpd.GeoDataFrame({"geometry": [aoi_geom]}, crs="EPSG:4326")
 
     return S1, aoi
