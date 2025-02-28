@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from src.database import get_db
 from src.crud.task import get_tasks
 from src.config import AWS_BUCKET_NAME, s3_client, AWS_PROCESSED_FOLDER
-from src.geospatial.helpers.interferogram import generate_filename
 
 router = APIRouter()
 
@@ -32,23 +31,24 @@ async def get_tiles_endpoint(eventid: str, z: int, x: int, y: int):
 
 
 @router.get("/files")
-async def get_files_endpoint(
+async def get_flood_files_endpoint(
     eventid: str,
     ext: str = "png",
+    analysis: str = "changedetection",
     responsetype: str = "url",
     db: Session = Depends(get_db),
 ):
-    tasks = get_tasks(db, eventid=eventid)
+    tasks = get_tasks(db, eventid=eventid, eventtype="flood", analysis=analysis)
     if not tasks:
         return JSONResponse(content={"detail": "File not found"})
 
     task = tasks[0]
     try:
         image_file_key = os.path.join(
-            AWS_PROCESSED_FOLDER, eventid, f"{task.filename}.{ext}"
+            AWS_PROCESSED_FOLDER, task.eventtype, eventid, f"{task.filename}.{ext}"
         )
         meta_file_key = os.path.join(
-            AWS_PROCESSED_FOLDER, eventid, f"{task.filename}.geojson"
+            AWS_PROCESSED_FOLDER, task.eventtype, eventid, f"{task.filename}.geojson"
         )
         geojson_object = s3_client.get_object(Bucket=AWS_BUCKET_NAME, Key=meta_file_key)
         geojson_data = geojson_object["Body"].read().decode("utf-8")
@@ -57,7 +57,6 @@ async def get_files_endpoint(
 
             return JSONResponse(
                 content={
-                    "base_url": "https://guardian-space-geospatial-data.s3.ap-south-1.amazonaws.com/",
                     "file_name": image_file_key,
                     "geojson": meta_file_key,
                 }

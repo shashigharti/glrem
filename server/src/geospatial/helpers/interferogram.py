@@ -26,7 +26,7 @@ from src.crud.task import get_tasks, update_task_status
 from src.geospatial.lib.pygmtsar import Stack, tqdm_dask, Tiles
 from src.geospatial.io.uploader.s3_client import copy_files_to_s3
 from src.geospatial.io.downloader.asf_client import download_data
-from src.geospatial.helpers.data_conversion import save_xarray_to_png
+from src.geospatial.helpers.dataconversion import save_xarray_to_png
 from src.geospatial.helpers.asf import process_asf_params
 
 
@@ -180,7 +180,7 @@ def _generate_interferogram(params, product="3s"):
     # los_displacement(sbas, unwrap, losdis_filepath)
 
     logger.print_log("info", "Copying files to s3 bucket")
-    dest = os.path.join(AWS_PROCESSED_FOLDER, eventid)
+    dest = os.path.join(AWS_PROCESSED_FOLDER, eventtype, eventid)
     copy_files_to_s3(outputdir, dest)
 
     return filepath_intf_png

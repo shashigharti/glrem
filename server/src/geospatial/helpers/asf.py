@@ -16,7 +16,7 @@ from src.config import (
     SCENES_FILENAME,
 )
 from src.utils.logger import logger
-from src.geospatial.helpers.scene_selection import find_matching_scenes, generate_aoi
+from src.geospatial.helpers.sceneselection import find_matching_scenes, generate_aoi
 
 
 def get_burst_or_scene(params, eventdate, startdate, enddate, crs="EPSG:4326"):

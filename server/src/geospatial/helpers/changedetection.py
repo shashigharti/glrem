@@ -1,8 +1,10 @@
 import os
+import time
+import shutil
 import argparse
 
-import psutil
 import dask
+import psutil
 import numpy as np
 
 from itertools import islice
@@ -15,7 +17,7 @@ from src.crud.task import get_tasks, update_task_status
 from src.geospatial.helpers.asf import process_asf_params
 from src.geospatial.io.uploader.s3_client import copy_files_to_s3
 from src.geospatial.io.downloader.asf_client import download_data
-from src.geospatial.helpers.data_conversion import (
+from src.geospatial.helpers.dataconversion import (
     save_npy_to_tif,
 )
 
@@ -56,13 +58,13 @@ def _generate_change_detection(params, product="3s", coarsen=None):
     # the downloaded data size uses lots of space so delete
     # existing data before running interferogram
     logger.print_log("info", "Emptying data directory")
-    # if os.path.exists(datadir):
-    #     time.sleep(1)
-    #     shutil.rmtree(datadir)
+    if os.path.exists(datadir):
+        time.sleep(1)
+        shutil.rmtree(datadir)
 
-    # if os.path.exists(workdir):
-    #     time.sleep(1)
-    #     shutil.rmtree(workdir)
+    if os.path.exists(workdir):
+        time.sleep(1)
+        shutil.rmtree(workdir)
 
     os.makedirs(outputdir, exist_ok=True)
     os.makedirs(datadir, exist_ok=True)
@@ -166,7 +168,7 @@ def _generate_change_detection(params, product="3s", coarsen=None):
     save_npy_to_tif(changed_intensity, bbox, filepath_changedetection_tif, crs)
 
     logger.print_log("info", "Copying files to s3 bucket")
-    dest = os.path.join(AWS_PROCESSED_FOLDER, eventid)
+    dest = os.path.join(AWS_PROCESSED_FOLDER, eventtype, eventid)
     copy_files_to_s3(outputdir, dest, file_types=["tif"])
     return filepath_changedetection_tif
 

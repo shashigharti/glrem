@@ -40,5 +40,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.delete:
-        delete_tasks(args.id)
+    if args.id:
+        delete_task_by_eventid(args.id)
+    else:
+        delete_tasks()

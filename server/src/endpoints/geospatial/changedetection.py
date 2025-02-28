@@ -12,7 +12,7 @@ from src.apis.usgs.earthquake import get_data, format_data
 from src.crud.task import create_task, get_tasks, update_task_status
 from src.geospatial.helpers.earthquake import get_daterange
 
-from src.geospatial.helpers.change_detection import (
+from src.geospatial.helpers.changedetection import (
     change_detection,
 )
 

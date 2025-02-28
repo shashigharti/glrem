@@ -30,7 +30,7 @@ from src.crud.task import get_tasks, update_task_status
 from src.geospatial.io.uploader.s3_client import copy_files_to_s3
 from src.utils.logger import logger
 from src.geospatial.io.downloader.asf_client import download_data
-from src.geospatial.helpers.data_conversion import (
+from server.src.geospatial.helpers.dataconversion import (
     save_xarray_to_png,
     save_xarray_to_tif,
 )

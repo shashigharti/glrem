@@ -12,8 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.endpoints.geospatial.interferogram import router as interferogram_router
 from src.endpoints.geospatial.task import router as task_router
 from src.endpoints.admin.user import router as user_router
-from src.endpoints.geospatial.artifact import router as artifact_router
 from src.endpoints.geospatial.earthquake import router as earthquake_router
+from src.endpoints.geospatial.flood import router as flood_router
 from src.endpoints.geospatial.changedetection import router as changedetection_router
 from src.endpoints.geospatial.damageassessment import router as damageassessment_router
 
@@ -27,10 +27,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(earthquake_router, prefix="/events", tags=["Events"])
+app.include_router(earthquake_router, prefix="/events/earthquakes", tags=["Events"])
+app.include_router(flood_router, prefix="/events/floods", tags=["Events"])
 app.include_router(changedetection_router, prefix="/geospatial", tags=["Geospatial"])
 app.include_router(damageassessment_router, prefix="/geospatial", tags=["Geospatial"])
-app.include_router(artifact_router, prefix="/geospatial", tags=["Geospatial"])
 app.include_router(task_router, prefix="/geospatial", tags=["Geospatial"])
 app.include_router(interferogram_router, prefix="/geospatial", tags=["Geospatial"])
 app.include_router(user_router, prefix="/user", tags=["User"])

@@ -3,48 +3,64 @@ import json
 import argparse
 
 import numpy as np
-import pandas as pd
 import geopandas as gpd
 import osmnx as ox
 import rasterio
+from rasterio.mask import mask
+from shapely.geometry import mapping, Polygon, LineString
+from shapely import wkt
+from joblib import Parallel, delayed
 
 from itertools import islice
-from joblib import Parallel, delayed
-from rasterio.mask import mask
-from shapely.geometry import box, mapping, Polygon, LineString
 
-from shapely import wkt
 from src.database import get_db
-from matplotlib.patches import Rectangle
 from src.crud.task import get_tasks, update_task_status
-
 from src.utils.logger import logger
 from src.config.examples import AOI
 from src.config import OUTPUT, DATADIR, AWS_PROCESSED_FOLDER
 from src.geospatial.io.uploader.s3_client import copy_files_to_s3
 
 
-def _download_data(output_directory, aoi_polygon):
-    print(f"Downloading OSM data for {aoi_polygon}...")
-
-    roads_graph = ox.graph_from_polygon(aoi_polygon, network_type="drive")
-    roads_gdf = ox.graph_to_gdfs(roads_graph, nodes=False, edges=True)
-    roads_gdf.to_file(os.path.join(output_directory, "roads.geojson"), driver="GeoJSON")
-    logger.print_log("info", f"Total roads: {len(roads_gdf)}")
-    logger.print_log("info", f"Bounding Box of roads: {roads_gdf.total_bounds}")
-
-    buildings_gdf = ox.features_from_polygon(aoi_polygon, tags={"building": True})
-    buildings_gdf.to_file(
-        os.path.join(output_directory, "buildings.geojson"), driver="GeoJSON"
-    )
-    logger.print_log("info", f"Total buildings: {len(buildings_gdf)}")
-    logger.print_log("info", f"Bounding Box of buildings: {buildings_gdf.total_bounds}")
+def _download_roads(output_directory, eventid, area):
+    logger.print_log("info", f"Downloading road data for {area}...")
+    try:
+        roads_graph = ox.graph_from_place(area, network_type="drive")
+        roads_gdf = ox.graph_to_gdfs(roads_graph, nodes=False, edges=True)
+        roads_gdf.to_file(
+            os.path.join(output_directory, f"{eventid}_roads.geojson"), driver="GeoJSON"
+        )
+        logger.print_log("info", f"Total roads: {len(roads_gdf)}")
+        logger.print_log("info", f"Bounding Box of roads: {roads_gdf.total_bounds}")
+    except Exception as e:
+        logger.print_log("error", f"Error downloading roads for {area}: {str(e)}")
 
 
-def batch_iterator(iterable, batch_size=1000):
-    iterator = iter(iterable)
-    while batch := list(islice(iterator, batch_size)):
-        yield batch
+def _download_buildings(output_directory, eventid, area):
+    logger.print_log("info", f"Downloading building data for {area}...")
+    try:
+        buildings_gdf = ox.features_from_place(area, tags={"building": True})
+        buildings_gdf.to_file(
+            os.path.join(output_directory, f"{eventid}_buildings.geojson"),
+            driver="GeoJSON",
+        )
+        logger.print_log("info", f"Total buildings: {len(buildings_gdf)}")
+        logger.print_log(
+            "info", f"Bounding Box of buildings: {buildings_gdf.total_bounds}"
+        )
+    except Exception as e:
+        logger.print_log("error", f"Error downloading buildings for {area}: {str(e)}")
+
+
+def _download_data(output_directory, eventid, area):
+    os.makedirs(output_directory, exist_ok=True)
+
+    downloads = [_download_buildings, _download_roads]
+
+    with Parallel(n_jobs=2, backend="multiprocessing") as parallel:
+        parallel(
+            delayed(download_fn)(output_directory, eventid, area)
+            for download_fn in downloads
+        )
 
 
 def _process_damaged_roads(filepath, roads_gdf, destdir, threshold=1.5, buffer_size=5):
@@ -70,7 +86,9 @@ def _process_damaged_roads(filepath, roads_gdf, destdir, threshold=1.5, buffer_s
                 print(f"Skipping road due to error: {e}")
 
     damaged_gdf = gpd.GeoDataFrame(damaged_roads, crs=roads_gdf.crs)
-    damaged_roads_fp = os.path.join(destdir, "damaged_roads_network.geojson")
+    damaged_roads_fp = os.path.join(
+        destdir, "earthquake-us6000jlqa-damageassessment-roads.geojson"
+    )
     damaged_gdf.to_file(damaged_roads_fp, driver="GeoJSON")
 
     if damaged_gdf.crs.is_geographic:
@@ -104,12 +122,14 @@ def _process_damaged_buildings(filepath, buildings_footprint, destdir, threshold
                 damaged_buildings.append(building)
 
     damaged_gdf = gpd.GeoDataFrame(damaged_buildings, crs=buildings_footprint.crs)
-    damaged_buildings_fp = os.path.join(destdir, "damaged_buildings_footprint.geojson")
+    damaged_buildings_fp = os.path.join(
+        destdir, "earthquake-us6000jlqa-damageassessment-buildings.geojson"
+    )
     damaged_gdf.to_file(damaged_buildings_fp, driver="GeoJSON")
     return len(damaged_buildings)
 
 
-def _process_road_networks(projected_gdf, destdir):
+def _process_roads_networks(projected_gdf, destdir):
     """Convert road geometries to GeoJSON format and save."""
     features = []
 
@@ -137,7 +157,7 @@ def _process_road_networks(projected_gdf, destdir):
         "features": features,
     }
 
-    filepath = os.path.join(destdir, "road_networks.geojson")
+    filepath = os.path.join(destdir, "roads_networks.geojson")
     with open(filepath, "w") as f:
         json.dump(geojson, f, indent=4)
 
@@ -167,13 +187,60 @@ def _process_building_footprints(projected_gdf, destdir):
         "features": features,
     }
 
-    filepath = os.path.join(destdir, "building_footprints.geojson")
+    filepath = os.path.join(destdir, "buildings_footprints.geojson")
     with open(filepath, "w") as f:
         json.dump(geojson, f, indent=4)
     return filepath
 
 
-def _process_damage_assessment(filepath, eventtype, eventid, aoi_geom):
+def _process_damage_assessment_buildings(
+    eventid, area, filepath, datadir_osm, outputdir
+):
+    buildings_filepath = os.path.join(datadir_osm, f"{eventid}_buildings.geojson")
+    print(buildings_filepath)
+    if not os.path.exists(buildings_filepath):
+        logger.print_log("info", "Data not found. Downloading...")
+        _download_data(datadir_osm, eventid, area)
+
+    logger.print_log("info", f"Processing building footprints")
+    buildings = os.path.join(datadir_osm, f"{eventid}_buildings.geojson")
+    buildings_gdf = gpd.read_file(buildings)
+    buildings_gdf = buildings_gdf.drop_duplicates(subset="geometry")
+    buildings_footprint_filepath = _process_building_footprints(
+        buildings_gdf, outputdir
+    )
+    logger.print_log("info", f"Processing damaged buildings")
+    building_footprints = gpd.read_file(buildings_footprint_filepath)
+    total_damaged_buildings_count = _process_damaged_buildings(
+        filepath, building_footprints, outputdir
+    )
+    logger.print_log(
+        "info", f"Total damaged buildings: {total_damaged_buildings_count}"
+    )
+
+
+def _process_damage_assessment_roads(eventid, area, filepath, datadir_osm, outputdir):
+    roads_filepath = os.path.join(datadir_osm, f"{eventid}_roads.geojson")
+    if not os.path.exists(roads_filepath):
+        logger.print_log("info", "Data not found. Downloading...")
+        _download_data(datadir_osm, eventid, area)
+
+    logger.print_log("info", f"Processing road footprints")
+    roads = os.path.join(datadir_osm, f"{eventid}_roads.geojson")
+    roads_gdf = gpd.read_file(roads)
+    roads_gdf = roads_gdf.drop_duplicates(subset="geometry")
+    roads_footprint_filepath = _process_roads_networks(roads_gdf, outputdir)
+    logger.print_log("info", f"Processing damaged roads")
+    road_footprints = gpd.read_file(roads_footprint_filepath)
+    total_damaged_roads_count = _process_damaged_roads(
+        filepath, road_footprints, outputdir
+    )
+    logger.print_log("info", f"Total damaged roads: {total_damaged_roads_count}")
+
+
+def _process_damage_assessment(
+    filepath, eventtype, eventid, area, assettype="buildings"
+):
     """
     Process earthquake-related damage detection by downloading OSM data,
     analyzing damage from raster files, and calculating statistics for damaged
@@ -184,39 +251,24 @@ def _process_damage_assessment(filepath, eventtype, eventid, aoi_geom):
     os.makedirs(outputdir, exist_ok=True)
     os.makedirs(datadir_osm, exist_ok=True)
 
-    logger.print_log("info", "Downloading data")
-    # _download_data(datadir_osm, aoi_geom)
+    processing_options = {
+        "roads": _process_damage_assessment_roads,
+        "buildings": _process_damage_assessment_buildings,
+    }
 
-    buildings = os.path.join(datadir_osm, "buildings.geojson")
-    buildings_gdf = gpd.read_file(buildings)
-    buildings_gdf = buildings_gdf.drop_duplicates(subset="geometry")
-
-    buildings_footprint_filepath = _process_building_footprints(
-        buildings_gdf, outputdir
-    )
-    building_footprints = gpd.read_file(buildings_footprint_filepath)
-    total_damaged_buildings_count = _process_damaged_buildings(
-        filepath, building_footprints, outputdir
-    )
-    logger.print_log(
-        "info", f"Total damaged buildings: {total_damaged_buildings_count}"
-    )
-
-    # roads = os.path.join(datadir_osm, "roads.geojson")
-    # roads_gdf = gpd.read_file(roads)
-    # road_networks = _process_road_networks(roads_gdf, datadir_osm)
-    # total_damaged_roads_count = _process_damaged_roads(filepath, road_networks)
-    # logger.print_log("info", f"Total damaged roads: {total_damaged_roads_count}")
+    processing_options[assettype](eventid, area, filepath, datadir_osm, outputdir)
 
     logger.print_log("info", "Copying files to s3 bucket")
-    dest = os.path.join(AWS_PROCESSED_FOLDER, eventid)
+    dest = os.path.join(AWS_PROCESSED_FOLDER, eventtype, eventid)
     copy_files_to_s3(outputdir, dest, file_types=["geojson"])
 
     filepath = os.path.join(outputdir, dest)
     return filepath
 
 
-def damage_assessment(taskid: str):
+def damage_assessment(
+    taskid: str, area: str = "Gaziantep, Turkey", assettype: str = "buildings"
+):
     db_session = next(get_db())
     try:
         task = get_tasks(db_session, taskid=taskid)[0]
@@ -225,14 +277,14 @@ def damage_assessment(taskid: str):
         if not task:
             raise ValueError(f"Task with ID {taskid} not found.")
 
-        aoi_geom = wkt.loads(AOI.get(task.eventid))
+        # aoi_geom = wkt.loads(AOI.get(task.eventid))
         outputdir = os.path.join(OUTPUT, task.eventtype, task.eventid)
         filepath = os.path.join(
             outputdir,
             f"{task.filename.replace('damageassessment', 'changedetection')}.tif",
         )
         result = _process_damage_assessment(
-            filepath, task.eventtype, task.eventid, aoi_geom
+            filepath, task.eventtype, task.eventid, area, assettype
         )
         logger.print_log(
             "info",
@@ -252,8 +304,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Generate damage assessment for a given task ID"
     )
-    parser.add_argument("--taskid", type=str, help="Task ID to process", default="1")
+    parser.add_argument("--id", type=str, help="Task ID to process", default="1")
     args = parser.parse_args()
 
     logger.print_log("info", f"Initiated damage assessment")
-    damage_assessment(args.taskid)
+    damage_assessment(args.id)
