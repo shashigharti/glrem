@@ -54,7 +54,7 @@ def get_task_status_endpoint(
         )
 
     if not tasks:
-        raise HTTPException(status_code=404, detail="Task not found")
+        return JSONResponse(content={"detail": "File not found"})
     return JSONResponse(status_code=200, content={"status": tasks[0].status})
 
 

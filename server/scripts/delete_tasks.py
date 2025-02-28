@@ -1,3 +1,4 @@
+import argparse
 from src.models import Task
 from src.database import SessionLocal
 
@@ -34,5 +35,10 @@ def delete_tasks():
 
 
 if __name__ == "__main__":
-    # delete_tasks()
-    delete_task_by_eventid(2)
+    parser = argparse.ArgumentParser(description="Task deletion script")
+    parser.add_argument("--id", type=int, help="Specify task ID to delete")
+
+    args = parser.parse_args()
+
+    if args.delete:
+        delete_tasks(args.id)
