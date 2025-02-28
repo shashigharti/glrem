@@ -47,8 +47,7 @@ const MapboxPage = () => {
     >
       <NavigationControl position="top-left" />
       <ScaleControl />
-
-      <Marker
+      {/* <Marker
         latitude={mapboxConfig.center[1]}
         longitude={mapboxConfig.center[0]}
       >
@@ -69,7 +68,7 @@ const MapboxPage = () => {
         >
           📍
         </div>
-      </Marker>
+      </Marker> */}
 
       {earthquakes
         .filter((quake, index) => selectedEarthquakes.includes(index))

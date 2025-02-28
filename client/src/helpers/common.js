@@ -21,7 +21,11 @@ export const generateEventId = (event, etype = "earthquake") => {
   return eventid;
 };
 
-export const generateFilename = (analysis = "intf", etype = "earthquake") => {
-  let filename = `${etype}-${analysis}`;
+export const generateFilename = (
+  id,
+  analysis = "intf",
+  etype = "earthquake",
+) => {
+  let filename = `${id}-${etype}-${analysis}`;
   return filename;
 };

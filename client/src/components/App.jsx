@@ -5,6 +5,7 @@ import MapboxPage from "./MapboxPage";
 import AnalysisList from "./AnalysisList";
 import Layer from "./Layer";
 import useAuthStore from "../store/auth";
+import CountrySelector from "./CountrySelector";
 
 const App = () => {
   const [activeTab, setActiveTab] = useState("map");
@@ -19,6 +20,7 @@ const App = () => {
       <nav className="navbar navbar-expand-lg navbar-light bg-light">
         <div className="container-fluid">
           <div className="navbar-brand">Guardian Space</div>
+          <CountrySelector />
           <div className="ml-auto">
             <Link to="/login" onClick={handleLogout} className="btn btn-link">
               Logout

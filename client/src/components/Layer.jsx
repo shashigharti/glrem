@@ -25,12 +25,13 @@ const LayerComponent = () => {
 
     if (useTile) return;
     const layer = layers.find((layer) => layer.filename === filename);
+    console.log(layer);
     if (
       !layer?.image ||
       typeof layer.image === "string" ||
       !(layer.image instanceof Blob)
     ) {
-      const { image, metadata } = await fetchLayer(eventid, filename);
+      const { image, metadata } = await fetchLayer(eventid);
 
       if (image instanceof Blob) {
         const imageUrl = URL.createObjectURL(image);
@@ -44,6 +45,7 @@ const LayerComponent = () => {
     }
   };
 
+  console.log(layers);
   if (!layers || layers.length === 0) {
     return null;
   }

@@ -1,11 +1,14 @@
 import { getRequest } from "../apis/client";
 
-export const fetchLayer = async (eventid, filename) => {
+export const fetchLayer = async (eventid, responsetype = "base64") => {
   try {
-    const endpoint = `${import.meta.env.VITE_APP_ENDPOINT}/geospatial/get-files`;
+    const endpoint = `${import.meta.env.VITE_APP_ENDPOINT}/geospatial/files`;
     console.log(`Fetching data from: ${endpoint}`);
 
-    const response = await getRequest(endpoint, { eventid, filename });
+    const response = await getRequest(endpoint, {
+      eventid,
+      responsetype,
+    });
 
     if (!response || !response.png_base64 || !response.geojson) {
       throw new Error("Invalid response data: Missing png_base64 or geojson");

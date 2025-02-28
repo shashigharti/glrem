@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import useCommonStore from "../store/map.js";
 import useEventStore from "../store/event.js";
-import { generateEventId, generateFilename } from "../helpers/common.js";
-import { postRequest } from "../apis/client";
+import { generateEventId } from "../helpers/common.js";
+import { postRequest, getRequest } from "../apis/client";
 import useAuthStore from "../store/auth";
 
 const CACHE_KEY = "earthquake_data";
-const EARTHQUAKE_RADIUS = 500;
+const EARTHQUAKE_RADIUS = 900;
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const R = 6371;
@@ -42,15 +42,16 @@ const Events = () => {
 
   const handleTabChange = (tab) => setActiveTab(tab);
 
-  const fiveYearsAgo = new Date();
-  fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+  const tenYearsAgo = new Date();
+  tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
 
   useEffect(() => {
     const fetchEarthquakeData = async () => {
       try {
         setLoading(true);
-
-        const cachedData = localStorage.getItem(CACHE_KEY);
+        const cache_key = `${CACHE_KEY}_${mapboxConfig.country}`;
+        const cachedData = localStorage.getItem(cache_key);
+        // console.log(cache_key, cachedData);
         if (cachedData) {
           const { timestamp, data } = JSON.parse(cachedData);
           const isCacheValid = Date.now() - timestamp < 24 * 60 * 60 * 1000;
@@ -60,23 +61,33 @@ const Events = () => {
             return;
           }
         }
+        const { minlat, minlon, maxlat, maxlon } = mapboxConfig.bounds;
+        const coordinates = `${minlat},${maxlat},${minlon},${maxlon}`;
+        const starttime = tenYearsAgo.toISOString();
+        const endtime = new Date().toISOString();
+        const minmagnitude = 5;
+        const url = `${import.meta.env.VITE_APP_ENDPOINT}/events/earthquakes`;
 
-        const response = await fetch(
-          `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${fiveYearsAgo.toISOString()}&endtime=${new Date().toISOString()}&minlatitude=35&maxlatitude=43&minlongitude=25&maxlongitude=45`,
-        );
+        const data = await getRequest(url, {
+          coordinates,
+          starttime,
+          endtime,
+          minmagnitude,
+        });
+        console.log(url);
 
-        if (!response.ok) {
-          console.log("Failed to fetch earthquake data");
+        if (!data || data.error) {
+          console.error(
+            "Failed to fetch earthquake data:",
+            data?.error || "Unknown error",
+          );
+          return;
         }
-
-        const data = await response.json();
-        const features = data.features.filter(
-          (quake) => quake.properties.mag >= 6.5,
-        );
-
+        let features = data.features;
+        console.log(features);
         const userLocation = mapboxConfig.center;
 
-        const nearbyEarthquakes = features.filter((quake) => {
+        let nearbyEarthquakes = features.filter((quake) => {
           const distance = haversineDistance(
             userLocation[1],
             userLocation[0],
@@ -85,9 +96,21 @@ const Events = () => {
           );
           return distance <= EARTHQUAKE_RADIUS;
         });
+        
+        if (import.meta.env.VITE_EXAMPLE_EARTHQUAKES) {
+          const earthquakeIds = import.meta.env.VITE_EXAMPLE_EARTHQUAKES
+            ? import.meta.env.VITE_EXAMPLE_EARTHQUAKES.split(",")
+            : [];
+
+          console.log(earthquakeIds);
+
+          nearbyEarthquakes = features.filter((quake) =>
+            earthquakeIds.includes(quake.id),
+          );
+        }
 
         localStorage.setItem(
-          CACHE_KEY,
+          cache_key,
           JSON.stringify({ timestamp: Date.now(), data: nearbyEarthquakes }),
         );
 
@@ -98,11 +121,12 @@ const Events = () => {
         setLoading(false);
       }
     };
+    console.log(mapboxConfig.bounds);
 
     fetchEarthquakeData();
-  }, [mapboxConfig.center]);
+  }, [mapboxConfig.bounds]);
 
-  const handleCheckboxChange = (quake, checked, index) => {
+  const handleCheckboxChange = (checked, index) => {
     if (checked) {
       setSelectedEarthquakes([...selectedEarthquakes, index]);
     } else {
@@ -117,29 +141,34 @@ const Events = () => {
   const handleIntfClick = (event, quake, action) => {
     event.preventDefault();
     const eventid = generateEventId(quake, "earthquake");
-    const filename = generateFilename(action.id, "earthquake");
-    const time = quake.properties.time;
-    const date = new Date(time);
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const year = date.getFullYear();
-    const eventtype = "earthquake";
+    // const eventDate = new Date(quake.properties.time);
+    // const year = eventDate.getUTCFullYear();
+    // const month = (eventDate.getUTCMonth() + 1).toString().padStart(2, "0");
+    // const day = eventDate.getUTCDate().toString().padStart(2, "0");
+    // const hours = eventDate.getUTCHours().toString().padStart(2, "0");
+    // const minutes = eventDate.getUTCMinutes().toString().padStart(2, "0");
+    // const seconds = eventDate.getUTCSeconds().toString().padStart(2, "0");
+    // const formattedDate = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}Z`;
+    // const eventtype = "earthquake";
+    // const filename = generateFilename(eventid, action.id, "earthquake");
 
-    const formattedDate = `${day}-${month}-${year}`;
+    console.log("auth", auth);
 
     const params = {
       userid,
       eventid,
-      filename,
-      eventtype,
-      date: formattedDate,
-      status: "processing",
-      analysis: action.name,
-      location: quake.properties.place,
-      latitude: quake.geometry.coordinates[0],
-      longitude: quake.geometry.coordinates[1],
+      // filename,
+      // eventtype,
+      // eventdate: formattedDate,
+      // status: "processing",
+      // analysis: action.name,
+      // location: quake.properties.place,
+      // latitude: quake.geometry.coordinates[0],
+      // longitude: quake.geometry.coordinates[1],
+      // country: mapboxConfig.country,
+      // magnitude: quake.properties["mag"],
     };
-    console.log(params);
+    console.log(params, quake);
     requestAnalysis(params);
   };
 
@@ -215,7 +244,7 @@ const Events = () => {
                       <input
                         type="checkbox"
                         onChange={(e) =>
-                          handleCheckboxChange(quake, e.target.checked, index)
+                          handleCheckboxChange(e.target.checked, index)
                         }
                       />
                       Id: {quake.id}, Magnitude:{quake.properties.mag}, Date:
