@@ -30,15 +30,14 @@ async def get_tiles_endpoint(eventid: str, z: int, x: int, y: int):
     return StreamingResponse(io.BytesIO(tile_data), media_type="image/png")
 
 
-@router.get("/files")
-async def get_flood_files_endpoint(
+@router.get("/inundation/files")
+async def get_flood_inundation_files_endpoint(
     eventid: str,
     ext: str = "png",
-    analysis: str = "changedetection",
     responsetype: str = "url",
     db: Session = Depends(get_db),
 ):
-    tasks = get_tasks(db, eventid=eventid, eventtype="flood", analysis=analysis)
+    tasks = get_tasks(db, eventid=eventid, eventtype="flood", analysis="inundation")
     if not tasks:
         return JSONResponse(content={"detail": "File not found"})
 
@@ -75,3 +74,75 @@ async def get_flood_files_endpoint(
             "geojson": json.loads(geojson_data),
         }
     )
+
+
+@router.get("/changedetection/files")
+async def get_flood_changedetection_files_endpoint(
+    eventid: str,
+    ext: str = "tif",
+    db: Session = Depends(get_db),
+):
+    tasks = get_tasks(
+        db, eventid=eventid, eventtype="flood", analysis="changedetection"
+    )
+    if not tasks:
+        return JSONResponse(content={"detail": "File not found"})
+
+    task = tasks[0]
+    try:
+        damaged_buildings_file_key = os.path.join(
+            AWS_PROCESSED_FOLDER,
+            task.eventtype,
+            eventid,
+            f"{task.filename}.{ext}",
+        )
+
+        s3_client.get_object(Bucket=AWS_BUCKET_NAME, Key=damaged_buildings_file_key)
+
+        content = {
+            "file_name": damaged_buildings_file_key,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+    return JSONResponse(content=content)
+
+
+@router.get("/damageassessment/files")
+async def get_flood_damageassessment_files_endpoint(
+    eventid: str,
+    ext: str = "geojson",
+    assettype: str = "buildings",
+    db: Session = Depends(get_db),
+):
+    tasks = get_tasks(
+        db, eventid=eventid, eventtype="flood", analysis="damageassessment"
+    )
+    if not tasks:
+        return JSONResponse(content={"detail": "File not found"})
+
+    task = tasks[0]
+    try:
+        damaged_buildings_file_key = os.path.join(
+            AWS_PROCESSED_FOLDER,
+            task.eventtype,
+            eventid,
+            f"{task.filename}-{assettype}.{ext}",
+        )
+        buildings_file_key = os.path.join(
+            AWS_PROCESSED_FOLDER,
+            task.eventtype,
+            eventid,
+            f"{assettype}-footprints.{ext}",
+        )
+
+        content = {
+            f"file_name_damaged_{assettype}_footprint": damaged_buildings_file_key,
+            f"file_name_{assettype}_footprint": buildings_file_key,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+    return JSONResponse(content=content)

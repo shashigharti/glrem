@@ -29,8 +29,10 @@ app.add_middleware(
 
 app.include_router(earthquake_router, prefix="/events/earthquakes", tags=["Events"])
 app.include_router(flood_router, prefix="/events/floods", tags=["Events"])
+
 app.include_router(changedetection_router, prefix="/geospatial", tags=["Geospatial"])
 app.include_router(damageassessment_router, prefix="/geospatial", tags=["Geospatial"])
-app.include_router(task_router, prefix="/geospatial", tags=["Geospatial"])
 app.include_router(interferogram_router, prefix="/geospatial", tags=["Geospatial"])
+
+app.include_router(task_router, prefix="/geospatial", tags=["User"])
 app.include_router(user_router, prefix="/user", tags=["User"])
