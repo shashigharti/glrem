@@ -12,14 +12,12 @@ from shapely.geometry import Point
 from src.geospatial.lib.pygmtsar import Stack, tqdm_dask, Tiles
 
 from src.config import (
-    RESOLUTION,
     AWS_PROCESSED_FOLDER,
     OUTPUT,
     DATADIR,
     WORKDIR,
     ASF_USERNAME,
     ASF_PASSWORD,
-    POLARIZATION,
     WAVELENGTH,
     COARSEN,
     SUBSWATH,
@@ -30,9 +28,8 @@ from src.crud.task import get_tasks, update_task_status
 from src.geospatial.io.uploader.s3_client import copy_files_to_s3
 from src.utils.logger import logger
 from src.geospatial.io.downloader.asf_client import download_data
-from server.src.geospatial.helpers.dataconversion import (
+from src.geospatial.helpers.dataconversion import (
     save_xarray_to_png,
-    save_xarray_to_tif,
 )
 from src.geospatial.helpers.asf import process_asf_params
 
@@ -63,13 +60,13 @@ def _generate_inundation(params, product="3s"):
     # the downloaded data size uses lots of space so delete
     # existing data before running interferogram
     logger.print_log("info", "Emptying data directory")
-    # if os.path.exists(datadir):
-    #     time.sleep(1)
-    #     shutil.rmtree(datadir)
+    if os.path.exists(datadir):
+        time.sleep(1)
+        shutil.rmtree(datadir)
 
-    # if os.path.exists(workdir):
-    #     time.sleep(1)
-    #     shutil.rmtree(workdir)
+    if os.path.exists(workdir):
+        time.sleep(1)
+        shutil.rmtree(workdir)
 
     os.makedirs(outputdir, exist_ok=True)
     os.makedirs(datadir, exist_ok=True)
