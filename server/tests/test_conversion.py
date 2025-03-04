@@ -4,7 +4,7 @@ import xarray as xr
 import pytest
 from PIL import Image
 from tempfile import TemporaryDirectory
-from server.src.geospatial.helpers.dataconversion import save_xarray_to_png
+from src.geospatial.helpers.dataconversion import save_xarray_to_png
 import geojson
 
 

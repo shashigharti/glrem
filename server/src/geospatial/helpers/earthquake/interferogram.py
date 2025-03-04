@@ -87,8 +87,6 @@ def _generate_interferogram(params, product="1s"):
     eventid = params.get("eventid")
 
     eventdate = params.get("eventdate")
-    # latitude = params.get("latitude")
-    # longitude = params.get("longitude")
     startdate = params.get("startdate")
     enddate = params.get("enddate")
 
@@ -114,9 +112,7 @@ def _generate_interferogram(params, product="1s"):
 
     logger.print_log("info", "Downloading Tiles")
     Tiles().download_dem(aoi, filename=dem, product=product)
-    Tiles().download_landmask(aoi, filename=landmask, product="3s").fillna(
-        0
-    ).plot.imshow(cmap="binary_r")
+    Tiles().download_landmask(aoi, filename=landmask, product=product)
 
     if "client" in globals():
         client.close()

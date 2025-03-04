@@ -20,6 +20,7 @@ def get_tasks(
     filename: str = None,
     eventtype: str = None,
     analysis: str = None,
+    asset: str = None,
 ):
     query = db.query(Task)
     if taskid:
@@ -38,6 +39,8 @@ def get_tasks(
         query = query.filter(Task.eventtype == eventtype)
     if analysis:
         query = query.filter(Task.analysis == analysis)
+    if analysis:
+        query = query.filter(Task.asset == asset)
     return query.all()
 
 

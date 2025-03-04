@@ -80,18 +80,15 @@ def _generate_change_detection(params, product="3s", coarsen=None):
     orbit = "D" if flight_direction == "Descending" else None
 
     dem = f"{datadir}/dem.nc"
+    landmask = f"{datadir}/landmask.nc"
     eventid = params.get("eventid")
 
     eventdate = params.get("eventdate")
-    latitude = params.get("latitude")
-    longitude = params.get("longitude")
     startdate = params.get("startdate")
     enddate = params.get("enddate")
-    epicenter = Point(longitude, latitude)
 
     logger.print_log("info", "Downloading Data")
     S1, aoi_gdf = download_data(
-        epicenter,
         eventdate,
         workdir,
         datadir,
@@ -101,12 +98,14 @@ def _generate_change_detection(params, product="3s", coarsen=None):
         startdate,
         enddate,
         eventid=eventid,
+        eventtype="earthquake",
     )
     aoi = aoi_gdf.unary_union.minimum_rotated_rectangle
     print(f"aoi: {aoi} type: {type(aoi)}")
 
     logger.print_log("info", "Downloading Tiles")
     Tiles().download_dem(aoi, filename=dem, product=product)
+    Tiles().download_landmask(aoi, filename=landmask, product=product)
 
     if "client" in globals():
         client.close()
@@ -179,7 +178,7 @@ def batch_iterator(iterable, batch_size=1000):
         yield batch
 
 
-def change_detection(taskid: str):
+def generate_change_detection(taskid: str):
     db_session = next(get_db())
     try:
         task = get_tasks(db_session, taskid=taskid)[0]
@@ -199,7 +198,7 @@ def change_detection(taskid: str):
             "filename": task.filename,
         }
         print(params)
-
+        logger.print_log("info", f"Initiated change detection generation")
         result = _generate_change_detection(params, coarsen=(3, 16))
         logger.print_log("info", f"Generated change detection map, saved at: {result}")
 
@@ -219,4 +218,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     logger.print_log("info", f"Initiated change detection generation")
-    filepath = change_detection(args.taskid)
+    filepath = generate_change_detection(args.taskid)

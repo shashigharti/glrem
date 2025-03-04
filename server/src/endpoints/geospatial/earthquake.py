@@ -17,9 +17,13 @@ from src.database import get_db
 from src.crud.task import create_task, get_tasks, update_task_status
 from src.config import AWS_BUCKET_NAME, s3_client, AWS_PROCESSED_FOLDER, USGS_ENDPOINT
 from src.apis.usgs.earthquake import get_data, format_data
-from src.geospatial.helpers.earthquake import get_daterange
-from src.geospatial.helpers.changedetection import change_detection
-from src.geospatial.helpers.interferogram import generate_interferogram
+from src.geospatial.helpers.earthquake.utils import get_daterange
+from src.geospatial.helpers.earthquake.changedetection import generate_change_detection
+from src.geospatial.helpers.earthquake.damageassessment import (
+    generate_damage_assessment,
+)
+from src.geospatial.helpers.earthquake.interferogram import generate_interferogram
+from src.config import OUTPUT
 
 router = APIRouter()
 
@@ -155,7 +159,7 @@ async def get_earthquake_damageassessment_files_endpoint(
     db: Session = Depends(get_db),
 ):
     tasks = get_tasks(
-        db, eventid=eventid, eventtype="earthquake", analysis="damageassessment"
+        db, eventid=eventid, eventtype="earthquake", analysis="changedetection"
     )
     if not tasks:
         return JSONResponse(content={"detail": "File not found"})
@@ -265,6 +269,12 @@ async def generate_interferogram_endpoint(
     }
 
 
+class InterferogramRequest(BaseModel):
+    userid: str
+    eventid: str
+    analysis: Optional[str] = "interferogram"
+
+
 @router.post("/interferogram/regenerate")
 def regenerate_task_endpoint(
     params: InterferogramRequest,
@@ -275,10 +285,15 @@ def regenerate_task_endpoint(
         db=db,
         eventid=params.eventid,
         userid=params.userid,
-        analysis="interferogram",
+        analysis=params.analysis,
     )
+    analysis_func = {
+        "interferogram": generate_interferogram,
+        "changedetection": generate_change_detection,
+        "damageassessment": generate_damage_assessment,
+    }
 
-    logger.print_log("Here are the tasks", task)
+    logger.print_log("info", f"Regenerating analysis {params.analysis}")
 
     if task is None:
         raise HTTPException(
@@ -287,12 +302,13 @@ def regenerate_task_endpoint(
     task = task[0]
     try:
         update_task_status(db=db, taskid=task.id, status="processing")
-        logger.print_log("info", f"Triggered interferogram regeneration.")
-        background_tasks.add_task(generate_interferogram, task.id)
+        background_tasks.add_task(analysis_func[params.analysis], task.id)
     except Exception as e:
         update_task_status(db=db, taskid=task.id, status="error")
-        logger.print_log("error", f"Error regenerating interferogram: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error generating interferogram.")
+        logger.print_log("error", f"Error regenerating {params.analysis}: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error regenerating {params.analysis}."
+        )
 
     return {
         "success": True,
@@ -363,7 +379,7 @@ async def generate_change_detection_endpoint(
 
     try:
         logger.print_log("info", f"Triggered change detection processing.")
-        background_tasks.add_task(change_detection, task.id)
+        background_tasks.add_task(generate_change_detection, task.id)
     except Exception as e:
         update_task_status(db=db_session, taskid=task.id, status="error")
         logger.print_log(
@@ -385,7 +401,7 @@ async def generate_change_detection_endpoint(
 class DamageAssessmentRequest(BaseModel):
     userid: str
     eventid: str
-    area: Optional[str] = "Gaziantep, Turkey"
+    area: str
 
 
 @router.post("/damageassessment/buildings")
@@ -398,6 +414,20 @@ async def generate_damage_assessment_endpoint(
     eventid = params_dict["eventid"]
     area = params_dict["area"]
     eventdetails = format_data(get_data(eventid))
+    asset = "buildings"
+
+    changedetection_filepath = os.path.join(
+        OUTPUT, "earthquake", eventid, f"earthquake-{eventid}-changedetection.tif"
+    )
+    logger.print_log("info", f"Checking file: {changedetection_filepath}")
+    file_exists = os.path.exists(changedetection_filepath)
+    if not file_exists:
+        logger.print_log("info", "File doesnot exists")
+        return JSONResponse(
+            content={
+                "detail": "Change detection file not found. Run change detection first."
+            }
+        )
 
     eventdate = eventdetails.get("eventdate")
     latitude = eventdetails.get("latitude")
@@ -420,6 +450,8 @@ async def generate_damage_assessment_endpoint(
     filename = generate_filename(eventid, eventtype, analysis)
     eventdetails["filename"] = filename
     eventdetails["analysis"] = analysis
+    params_dict["areaofinterest"] = area
+    params_dict["asset"] = asset
 
     existing_tasks = get_tasks(
         db=db_session,
@@ -427,6 +459,7 @@ async def generate_damage_assessment_endpoint(
         longitude=longitude,
         eventtype=eventtype,
         analysis=analysis,
+        asset=asset,
     )
 
     if existing_tasks:
@@ -444,7 +477,7 @@ async def generate_damage_assessment_endpoint(
 
     try:
         logger.print_log("info", f"Triggered damage assessment processing.")
-        background_tasks.add_task(damage_assessment, task.id, area, "buildings")
+        background_tasks.add_task(generate_damage_assessment, task.id)
     except Exception as e:
         update_task_status(db=db_session, taskid=task.id, status="error")
         logger.print_log(
@@ -519,7 +552,7 @@ async def generate_damage_assessment_endpoint(
 
     try:
         logger.print_log("info", f"Triggered damage assessment processing.")
-        background_tasks.add_task(damage_assessment, task.id, area, "roads")
+        background_tasks.add_task(generate_damage_assessment, task.id, area, "roads")
     except Exception as e:
         update_task_status(db=db_session, taskid=task.id, status="error")
         logger.print_log(

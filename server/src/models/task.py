@@ -27,10 +27,11 @@ class Task(Base):
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
-    filename = Column(String, index=True)
+    filename = Column(String)
     analysis = Column(String)
     areaofinterest = Column(String)
-    status = Column(String, index=True, nullable=False)
+    status = Column(String, nullable=False)
+    asset = Column(String)
 
     userid = Column(String, ForeignKey("users.userid"), index=True, nullable=False)
     user = relationship("User", back_populates="tasks")

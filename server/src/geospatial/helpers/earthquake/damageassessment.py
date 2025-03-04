@@ -8,15 +8,12 @@ import osmnx as ox
 import rasterio
 from rasterio.mask import mask
 from shapely.geometry import mapping, Polygon, LineString
-from shapely import wkt
-from joblib import Parallel, delayed
 
-from itertools import islice
+from joblib import Parallel, delayed
 
 from src.database import get_db
 from src.crud.task import get_tasks, update_task_status
 from src.utils.logger import logger
-from src.config.examples import AOI
 from src.config import OUTPUT, DATADIR, AWS_PROCESSED_FOLDER
 from src.geospatial.io.uploader.s3_client import copy_files_to_s3
 
@@ -63,11 +60,13 @@ def _download_data(output_directory, eventid, area):
         )
 
 
-def _process_damaged_roads(filepath, roads_gdf, destdir, threshold=1.5, buffer_size=5):
+def _process_damaged_roads(
+    cd_filepath, eventid, roads_gdf, destdir, threshold=1.5, buffer_size=5
+):
     """Process roads to detect damage based on raster intensity."""
     damaged_roads = []
 
-    with rasterio.open(filepath) as src:
+    with rasterio.open(cd_filepath) as src:
         for _, road in roads_gdf.iterrows():
             if not isinstance(road.geometry, LineString):
                 continue
@@ -87,7 +86,7 @@ def _process_damaged_roads(filepath, roads_gdf, destdir, threshold=1.5, buffer_s
 
     damaged_gdf = gpd.GeoDataFrame(damaged_roads, crs=roads_gdf.crs)
     damaged_roads_fp = os.path.join(
-        destdir, "earthquake-us6000jlqa-damageassessment-roads.geojson"
+        destdir, f"earthquake-{eventid}-damageassessment-roads.geojson"
     )
     damaged_gdf.to_file(damaged_roads_fp, driver="GeoJSON")
 
@@ -98,10 +97,12 @@ def _process_damaged_roads(filepath, roads_gdf, destdir, threshold=1.5, buffer_s
     return total_damaged_roads_km
 
 
-def _process_damaged_buildings(filepath, buildings_footprint, destdir, threshold=1.5):
+def _process_damaged_buildings(
+    cd_filepath, eventid, buildings_footprint, destdir, threshold=1.5
+):
     """Process buildings in batches to detect damage."""
     damaged_buildings = []
-    with rasterio.open(filepath) as src:
+    with rasterio.open(cd_filepath) as src:
         for _, building in buildings_footprint.iterrows():
             bbox = building.geometry.bounds
             building_mask = Polygon(
@@ -123,7 +124,7 @@ def _process_damaged_buildings(filepath, buildings_footprint, destdir, threshold
 
     damaged_gdf = gpd.GeoDataFrame(damaged_buildings, crs=buildings_footprint.crs)
     damaged_buildings_fp = os.path.join(
-        destdir, "earthquake-us6000jlqa-damageassessment-buildings.geojson"
+        destdir, f"earthquake-{eventid}-damageassessment-buildings.geojson"
     )
     damaged_gdf.to_file(damaged_buildings_fp, driver="GeoJSON")
     return len(damaged_buildings)
@@ -212,7 +213,7 @@ def _process_damage_assessment_buildings(
     logger.print_log("info", f"Processing damaged buildings")
     building_footprints = gpd.read_file(buildings_footprint_filepath)
     total_damaged_buildings_count = _process_damaged_buildings(
-        filepath, building_footprints, outputdir
+        filepath, eventid, building_footprints, outputdir
     )
     logger.print_log(
         "info", f"Total damaged buildings: {total_damaged_buildings_count}"
@@ -238,7 +239,7 @@ def _process_damage_assessment_roads(eventid, area, filepath, datadir_osm, outpu
     logger.print_log("info", f"Total damaged roads: {total_damaged_roads_count}")
 
 
-def _process_damage_assessment(
+def _generate_damage_assessment(
     filepath, eventtype, eventid, area, assettype="buildings"
 ):
     """
@@ -266,9 +267,7 @@ def _process_damage_assessment(
     return filepath
 
 
-def damage_assessment(
-    taskid: str, area: str = "Gaziantep, Turkey", assettype: str = "buildings"
-):
+def generate_damage_assessment(taskid: str):
     db_session = next(get_db())
     try:
         task = get_tasks(db_session, taskid=taskid)[0]
@@ -283,8 +282,9 @@ def damage_assessment(
             outputdir,
             f"{task.filename.replace('damageassessment', 'changedetection')}.tif",
         )
-        result = _process_damage_assessment(
-            filepath, task.eventtype, task.eventid, area, assettype
+        logger.print_log("info", f"Initiated damage assessment generation")
+        result = _generate_damage_assessment(
+            filepath, task.eventtype, task.eventid, task.area, task.asset
         )
         logger.print_log(
             "info",
@@ -308,4 +308,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     logger.print_log("info", f"Initiated damage assessment")
-    damage_assessment(args.id)
+    generate_damage_assessment(args.id)

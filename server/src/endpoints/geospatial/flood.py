@@ -15,8 +15,8 @@ from src.database import get_db
 from src.crud.task import create_task, get_tasks, update_task_status
 from src.config import AWS_BUCKET_NAME, s3_client, AWS_PROCESSED_FOLDER
 from src.apis.usgs.earthquake import get_data, format_data
-from src.geospatial.helpers.earthquake import get_daterange
-from src.geospatial.helpers.inundation import generate_inundation
+from src.geospatial.helpers.earthquake.utils import get_daterange
+from src.geospatial.helpers.flood.inundation import generate_inundation
 
 router = APIRouter()
 
