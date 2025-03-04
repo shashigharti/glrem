@@ -22,7 +22,7 @@ def test_interferogram_turkey():
     )
 
     params_dict = params.model_dump()
-    response = client.post("/geospatial/interferogram", json=params_dict)
+    response = client.post("/earthquakes/interferogram", json=params_dict)
     print(response)
 
     assert response.status_code == 200
@@ -49,7 +49,7 @@ def test_interferogram_iraq():
     )
 
     params_dict = params.model_dump()
-    response = client.post("/geospatial/interferogram", json=params_dict)
+    response = client.post("/earthquakes/interferogram", json=params_dict)
     print(response)
 
     assert response.status_code == 200

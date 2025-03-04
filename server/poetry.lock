@@ -5153,6 +5153,21 @@ urllib3 = ">=1.25.10,<3.0"
 tests = ["coverage (>=6.0.0)", "flake8", "mypy", "pytest (>=7.0.0)", "pytest-asyncio", "pytest-cov", "pytest-httpserver", "tomli", "tomli-w", "types-PyYAML", "types-requests"]
 
 [[package]]
+name = "reverse-geocoder"
+version = "1.5.1"
+description = "Fast, offline reverse geocoder"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "reverse_geocoder-1.5.1.tar.gz", hash = "sha256:2a2e781b5f69376d922b78fe8978f1350c84fce0ddb07e02c834ecf98b57c75c"},
+]
+
+[package.dependencies]
+numpy = ">=1.11.0"
+scipy = ">=0.17.1"
+
+[[package]]
 name = "rfc3339-validator"
 version = "0.1.4"
 description = "A pure python RFC3339 validator"
@@ -7017,4 +7032,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "4ec1a0b7f5c33c3e83fcf69251fbe39ff36c9ec64366b09ba7863006eb586962"
+content-hash = "03a692db1b1667c99608be43dcd462ea592f1ce94af19c7f8694a53277880c4b"

@@ -7,7 +7,6 @@ import argparse
 import numpy as np
 import dask
 from dask.distributed import Client
-from shapely.geometry import Point
 
 from src.config import (
     AWS_PROCESSED_FOLDER,
@@ -28,9 +27,10 @@ from src.geospatial.io.uploader.s3_client import copy_files_to_s3
 from src.geospatial.io.downloader.asf_client import download_data
 from src.geospatial.helpers.dataconversion import save_xarray_to_png
 from src.geospatial.helpers.asf import process_asf_params
+from src.geospatial.helpers.common import revised_aoi
 
 
-def _generate_interferogram(params, product="3s"):
+def _generate_interferogram(params, product="1s"):
     """
     Generate and process an interferogram using Sentinel-1 data.
 
@@ -53,13 +53,21 @@ def _generate_interferogram(params, product="3s"):
     # the downloaded data size uses lots of space so delete
     # existing data before running interferogram
     logger.print_log("info", "Emptying data directory")
-    if os.path.exists(datadir):
-        time.sleep(1)
-        shutil.rmtree(datadir)
 
-    if os.path.exists(workdir):
-        time.sleep(1)
-        shutil.rmtree(workdir)
+    def delete_folder(folder):
+        if os.path.exists(folder):
+            logger.print_log("info", f"Deleting {folder}...")
+            shutil.rmtree(folder)
+
+            while os.path.exists(folder):  # Wait until it's completely deleted
+                time.sleep(1)
+
+            logger.print_log("info", f"{folder} has been deleted successfully.")
+        else:
+            logger.print_log("info", f"{folder} does not exist.")
+
+    delete_folder(datadir)
+    delete_folder(workdir)
 
     os.makedirs(outputdir, exist_ok=True)
     os.makedirs(datadir, exist_ok=True)
@@ -75,18 +83,17 @@ def _generate_interferogram(params, product="3s"):
     orbit = "D" if flight_direction == "Descending" else None
 
     dem = f"{datadir}/dem.nc"
+    landmask = f"{datadir}/landmask.nc"
     eventid = params.get("eventid")
 
     eventdate = params.get("eventdate")
-    latitude = params.get("latitude")
-    longitude = params.get("longitude")
+    # latitude = params.get("latitude")
+    # longitude = params.get("longitude")
     startdate = params.get("startdate")
     enddate = params.get("enddate")
-    epicenter = Point(longitude, latitude)
 
     logger.print_log("info", "Downloading Data")
     S1, aoi_gdf = download_data(
-        epicenter,
         eventdate,
         workdir,
         datadir,
@@ -96,12 +103,20 @@ def _generate_interferogram(params, product="3s"):
         startdate,
         enddate,
         eventid=eventid,
+        eventtype="earthquake",
     )
+
+    logger.print_log("info", f"AOI:{aoi_gdf.unary_union.minimum_rotated_rectangle}")
+    aoi_gdf = revised_aoi(aoi_gdf, eventdate)
+
     aoi = aoi_gdf.unary_union.minimum_rotated_rectangle
-    print(f"aoi: {aoi} type: {type(aoi)}")
+    logger.print_log("info", f"Revised aoi: {aoi} type: {type(aoi)}")
 
     logger.print_log("info", "Downloading Tiles")
     Tiles().download_dem(aoi, filename=dem, product=product)
+    Tiles().download_landmask(aoi, filename=landmask, product="3s").fillna(
+        0
+    ).plot.imshow(cmap="binary_r")
 
     if "client" in globals():
         client.close()
@@ -127,6 +142,7 @@ def _generate_interferogram(params, product="3s"):
 
     logger.print_log("info", "Processing DEM")
     sbas.load_dem(dem, aoi)
+    sbas.load_landmask(landmask, aoi)
 
     logger.print_log("info", "Processing alignment")
     sbas.compute_align()
@@ -134,6 +150,7 @@ def _generate_interferogram(params, product="3s"):
     logger.print_log("info", "Processing geocode")
     sbas.compute_geocode()
     pairs = [sbas.to_dataframe().index.unique()]
+    logger.print_log("info", f"pairs: {pairs}")
 
     logger.print_log("info", "Processing topo")
     topo = sbas.get_topo()

@@ -7,12 +7,13 @@ import requests
 import math
 from geopy.distance import geodesic
 
+from src.utils.logger import logger
 from src.config.constants import (
-    OUTPUT,
+    DATADIR,
     PERP_BASELINE_MIN,
     PERP_BASELINE_MAX,
     TEMP_BASELINE,
-    SCENES_FILENAME,
+    SCENES_CANDIDATES,
     USGS_ENDPOINT,
 )
 
@@ -22,7 +23,7 @@ def _get_shakemap_url(earthquake_id):
     Fetch the ShakeMap URL for a given earthquake ID.
     """
     params = {"format": "geojson", "eventid": earthquake_id}
-
+    logger.print_log("info", USGS_ENDPOINT)
     response = requests.get(USGS_ENDPOINT, params=params)
     if response.status_code != 200:
         return None
@@ -31,8 +32,10 @@ def _get_shakemap_url(earthquake_id):
     products = data.get("properties", {}).get("products", {})
 
     if "shakemap" in products:
-        shakemap = products["shakemap"][0]  # Get the latest ShakeMap entry
-        return shakemap.get("contents", {}).get("download/cont_mmi.json", {}).get("url")
+        shakemap = products["shakemap"][0]
+        url = shakemap.get("contents", {}).get("download/cont_mmi.json", {}).get("url")
+        logger.print_log("info", url)
+        return url
 
     return None
 
@@ -67,14 +70,23 @@ def _get_bounding_box(lat, lon, half_side_km):
     ]
 
 
-def generate_aoi(earthquake_id):
+def generate_aoi(eventid, eventtype="earthquake"):
     """Fetch earthquake details and compute bounding box based on MMI 5 radius."""
 
-    event_url = f"{USGS_ENDPOINT}?format=geojson&eventid={earthquake_id}"
+    geojson_filepath = os.path.join(
+        DATADIR, eventtype, eventid, f"{eventid}_bbox.geojson"
+    )
+    # if os.path.exists(geojson_filepath):
+    #     return geojson_filepath
+
+    event_url = f"{USGS_ENDPOINT}?format=geojson&eventid={eventid}"
     event_response = requests.get(event_url)
 
     if event_response.status_code != 200:
-        print(f"Error fetching earthquake details: HTTP {event_response.status_code}")
+        logger.print_log(
+            "info",
+            f"Error fetching earthquake details: HTTP {event_response.status_code}",
+        )
         return
 
     event_data = event_response.json()
@@ -82,16 +94,16 @@ def generate_aoi(earthquake_id):
     geometry = event_data.get("geometry", {})
 
     if not geometry or "coordinates" not in geometry:
-        print("Invalid earthquake data.")
+        logger.print_log("info", "Invalid earthquake data.")
         return
 
     magnitude = properties.get("mag", None)
     longitude, latitude, _ = geometry["coordinates"]
 
-    print(f"Earthquake ID: {earthquake_id}")
-    print(f"Magnitude: {magnitude}")
+    logger.print_log("info", f"Earthquake ID: {eventid}")
+    logger.print_log("info", f"Magnitude: {magnitude}")
 
-    shakemap_url = _get_shakemap_url
+    shakemap_url = f"https://earthquake.usgs.gov/product/shakemap/{eventid}/us/1681495642674/download/cont_mmi.json"  # _get_shakemap_url
     response = requests.get(shakemap_url)
 
     radius = None  # mmi 5
@@ -119,18 +131,27 @@ def generate_aoi(earthquake_id):
                             radius = max_radius
     if radius is None:
         radius = 10 ** (0.5 * magnitude - 1.5)
-        print(f"MMI = 5 Radius (from empirical formula): {round(radius, 2)} km")
+        logger.print_log(
+            "info", f"MMI = 5 Radius (from empirical formula): {round(radius, 2)} km"
+        )
     else:
-        print(f"MMI = 5 Radius (from USGS ShakeMap): {round(radius, 2)} km")
+        logger.print_log(
+            "info", f"MMI = 5 Radius (from USGS ShakeMap): {round(radius, 2)} km"
+        )
 
     half_km = radius / 2
     coords = _get_bounding_box(latitude, longitude, half_km)
 
-    width_km = geodesic(coords[0], coords[1]).kilometers
-    height_km = geodesic(coords[0], coords[3]).kilometers
+    width_km = geodesic(
+        (coords[0][1], coords[0][0]), (coords[1][1], coords[1][0])
+    ).kilometers
 
-    print(f"Bounding Box Width: {round(width_km, 2)} km")
-    print(f"Bounding Box Height: {round(height_km, 2)} km")
+    height_km = geodesic(
+        (coords[0][1], coords[0][0]), (coords[3][1], coords[3][0])
+    ).kilometers
+
+    logger.print_log("info", f"Bounding Box Width: {round(width_km, 2)} km")
+    logger.print_log("info", f"Bounding Box Height: {round(height_km, 2)} km")
 
     geojson_data = {
         "type": "FeatureCollection",
@@ -138,7 +159,7 @@ def generate_aoi(earthquake_id):
             {
                 "type": "Feature",
                 "properties": {
-                    "earthquake_id": earthquake_id,
+                    "earthquake_id": eventid,
                     "radius_km": round(radius, 2),
                     "width_km": round(width_km, 2),
                     "height_km": round(height_km, 2),
@@ -148,23 +169,22 @@ def generate_aoi(earthquake_id):
         ],
     }
 
-    geojson_filename = f"{earthquake_id}_bbox.geojson"
-    with open(geojson_filename, "w") as geojson_file:
+    os.makedirs(os.path.dirname(geojson_filepath), exist_ok=True)
+    with open(geojson_filepath, "w") as geojson_file:
         json.dump(geojson_data, geojson_file, indent=4)
 
-    print(f"Square bounding box saved as {geojson_filename}")
-    return geojson_filename
+    logger.print_log("info", f"Square bounding box saved as {geojson_filepath}")
+    return geojson_filepath
 
 
-def find_matching_scenes(scenes):
+def find_matching_scenes(scenes, eventdate, eventtype, eventid):
     """
     Query Sentinel-1 scenes within a given geographical region and time period.
     """
 
     candidates = []
-    tempbaselinefilename = "tmpbaseline.csv"
+    tmpbaseline_filepath = os.path.join(DATADIR, eventtype, eventid, "tmpbaseline.csv")
 
-    # Process each scene to find baseline matches
     for scene_id in scenes:
         print(f"Processing: {scene_id}")
         results = asf.stack_from_id(scene_id)
@@ -173,7 +193,6 @@ def find_matching_scenes(scenes):
             continue
 
         response_df = pd.DataFrame([feature.properties for feature in results])
-        tmpbaseline_filepath = os.path.join(OUTPUT, tempbaselinefilename)
         response_df.to_csv(tmpbaseline_filepath, index=False)
 
         baseline_df = pd.read_csv(tmpbaseline_filepath).replace("None", np.nan)
@@ -203,7 +222,7 @@ def find_matching_scenes(scenes):
             candidates.append(baseline_filtered)
 
     if not candidates:
-        print("No matching baseline scenes found.")
+        logger.print_log("info", "No matching baseline scenes found.")
         return
 
     candidates_df = pd.concat(candidates, ignore_index=True)
@@ -213,15 +232,30 @@ def find_matching_scenes(scenes):
     candidates_df["MatchDate"] = pd.to_datetime(
         candidates_df["MatchID"].str[17:25], format="%Y%m%d"
     )
-    candidates_df["inAOInDates"] = candidates_df["MatchID"].isin(scene_id)
+    candidates_df["inAOInDates"] = candidates_df["MatchID"].isin([scene_id])
     candidates_df["Download"] = False
     candidates_df.sort_values(by=["inAOInDates"], ascending=False, inplace=True)
+    candidates_df["startTime_str"] = candidates_df["startTime"].astype(str)
+    eventdate_str = eventdate.strftime("%Y-%m-%d %H:%M:%S")
+    candidates_df = candidates_df[candidates_df["startTime"] < eventdate_str]
 
-    output_filepath = os.path.join(OUTPUT, SCENES_FILENAME)
+    output_filepath = os.path.join(DATADIR, eventtype, eventid, SCENES_CANDIDATES)
+    logger.print_log("info", output_filepath)
+
     candidates_df.to_csv(output_filepath, index=False)
+    candidates_sorted_df = candidates_df.sort_values(
+        by=["temporalBaseline", "perpendicularBaseline"], key=lambda x: x.abs()
+    )
+    candidates_filtered_df = candidates_sorted_df.groupby(
+        "ReferenceID", as_index=False
+    ).first()
+    candidates_filtered_df.to_csv(
+        output_filepath.replace("scenes_candidates", "scenes_candidates_filtered"),
+        index=False,
+    )
 
-    os.remove(tempbaselinefilename)
-    return candidates_df
+    os.remove(tmpbaseline_filepath)
+    return candidates_filtered_df
 
 
 def main():

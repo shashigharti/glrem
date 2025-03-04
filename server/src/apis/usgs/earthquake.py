@@ -1,7 +1,8 @@
 import json
 import requests
+from src.utils.logger import logger
 from datetime import datetime
-from geopy.geocoders import Nominatim
+import reverse_geocoder as rg
 
 """
 This module provides functions to fetch and process earthquake event data from the USGS API.
@@ -53,10 +54,13 @@ def get_data(event_id):
     response = requests.get(url)
 
     if response.status_code == 200:
-        return response.json()
+        logger.print_log("info", "Successfully received event data")
+        event_data = response.json()
+        return event_data
 
-    print(
-        f"Failed to fetch data for event ID {event_id}. Status code: {response.status_code}"
+    logger.print_log(
+        "info",
+        f"Failed to fetch data for event ID {event_id}. Status code: {response.status_code}",
     )
     return None
 
@@ -73,19 +77,19 @@ def format_data(event):
     -------
     - dict (dict) : Formatted event data including event date, location, magnitude, latitude, and longitude.
     """
+
+    def get_country(lat, lon):
+        result = rg.search((lat, lon))
+        return result[0]["cc"]
+
     properties = event.get("properties", {})
     geometry = event.get("geometry", {})
     coordinates = geometry.get("coordinates", [None, None])
     latitude = coordinates[0]
     longitude = coordinates[1]
     event_time = properties.get("time")
-    geolocator = Nominatim(user_agent="earthquake_country")
-
-    location = geolocator.reverse(
-        (latitude, longitude), language="en", exactly_one=True
-    )
-    address = location.address if location else "Unknown location"
-    country = address.split(",")[-1].strip()
+    country = get_country(latitude, longitude)
+    logger.print_log("info", f"Earthquake Location: {country}")
 
     if event_time:
         event_time = datetime.utcfromtimestamp(event_time / 1000)

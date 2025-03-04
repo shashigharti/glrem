@@ -22,7 +22,6 @@ def benchmark(func, *args, **kwargs):
 
 
 def download_data(
-    epicenter,
     eventdate,
     workdir,
     datadir,
@@ -56,11 +55,17 @@ def download_data(
     asf = ASF(**credentials)
 
     eventid = kwargs.get("eventid")
+    eventtype = kwargs.get("eventtype")
     file_names = SCENES.get(eventid)
 
     if not file_names:
         file_names = asf_helper.get_burst_or_scene(
-            asf_params, eventdate, startdate, enddate, epicenter=epicenter
+            asf_params,
+            eventid,
+            eventtype,
+            eventdate,
+            startdate,
+            enddate,
         )
 
     logger.print_log("info", f"Selected scenes: {len(file_names)}")
@@ -75,10 +80,7 @@ def download_data(
     logger.print_log("info", f"Downloading Orbits")
     S1.download_orbits(datadir, S1.scan_slc(datadir))
 
-    aoi_geom = wkt.loads(AOI.get(eventid))
-    if not aoi_geom:
-        aoi_geom = S1.scan_slc(datadir)
-    aoi = gpd.GeoDataFrame({"geometry": [aoi_geom]}, crs="EPSG:4326")
+    aoi = S1.scan_slc(datadir)
 
     return S1, aoi
 

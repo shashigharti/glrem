@@ -198,8 +198,12 @@ async def generate_interferogram_endpoint(
     db: Session = Depends(get_db),
 ):
     params_dict = params.model_dump()
+    logger.print_log("info", f"Initiated request for {params_dict}")
+
     eventid = params_dict["eventid"]
-    eventdetails = format_data(get_data(params_dict["eventid"]))
+    event_data = get_data(params_dict["eventid"])
+    eventdetails = format_data(event_data)
+    logger.print_log("info", f"Event found: {eventdetails}")
 
     eventdate = eventdetails.get("eventdate")
     latitude = eventdetails.get("latitude")
@@ -258,6 +262,44 @@ async def generate_interferogram_endpoint(
         "task_id": task.id,
         "eventid": eventid,
         "filename": filename,
+    }
+
+
+@router.post("/interferogram/regenerate")
+def regenerate_task_endpoint(
+    params: InterferogramRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    task = get_tasks(
+        db=db,
+        eventid=params.eventid,
+        userid=params.userid,
+        analysis="interferogram",
+    )
+
+    logger.print_log("Here are the tasks", task)
+
+    if task is None:
+        raise HTTPException(
+            status_code=404, detail="Task not found or cannot be regenerated"
+        )
+    task = task[0]
+    try:
+        update_task_status(db=db, taskid=task.id, status="processing")
+        logger.print_log("info", f"Triggered interferogram regeneration.")
+        background_tasks.add_task(generate_interferogram, task.id)
+    except Exception as e:
+        update_task_status(db=db, taskid=task.id, status="error")
+        logger.print_log("error", f"Error regenerating interferogram: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error generating interferogram.")
+
+    return {
+        "success": True,
+        "status": "processing",
+        "task_id": task.id,
+        "eventid": params.eventid,
+        "filename": task.filename,
     }
 
 
