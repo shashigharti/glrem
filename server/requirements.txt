@@ -15,7 +15,6 @@ rasterio==1.4.3
 scikit-image==0.25.0
 scikit-learn==1.6.0
 shapely==2.0.6
-snappy==3.1.1
 tqdm==4.67.1
 vtk==9.3.1
 xarray==2024.11.0
@@ -34,3 +33,8 @@ bcrypt==4.2.1
 passlib==1.7.4
 alembic==1.14.1
 sqlmodel==0.0.22
+sqlalchemy-utils===0.41.2
+reverse_geocoder===1.5.1
+sentinelsat===1.2.1
+geopy===2.4.1
+osmnx===2.0.6

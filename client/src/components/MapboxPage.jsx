@@ -47,28 +47,6 @@ const MapboxPage = () => {
     >
       <NavigationControl position="top-left" />
       <ScaleControl />
-      {/* <Marker
-        latitude={mapboxConfig.center[1]}
-        longitude={mapboxConfig.center[0]}
-      >
-        <div
-          style={{
-            backgroundColor: "red",
-            width: "20px",
-            height: "20px",
-            borderRadius: "50%",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            color: "white",
-            fontSize: "12px",
-            fontWeight: "bold",
-            textAlign: "center",
-          }}
-        >
-          📍
-        </div>
-      </Marker> */}
 
       {earthquakes
         .filter((quake, index) => selectedEarthquakes.includes(index))

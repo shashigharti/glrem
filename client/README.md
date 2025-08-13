@@ -1,4 +1,4 @@
-# Guardian Space App
+# GLREM App
 
 ## Setup
 
@@ -49,7 +49,7 @@ follows:
 VITE_APP_ENDPOINT=http://localhost/:8000
 VITE_APP_URL=http://localhost:5173/
 VITE_REGION=us-east-1
-VITE_BUCKET_NAME=guardian-sentinel1-slc
+VITE_BUCKET_NAME=glrem-sentinel1-slc
 VITE_ACCESS_KEY_ID=AKIARWILO5L446IG2
 VITE_SECRET_ACCESS_KEY=lYJYWg00kUqlIHlK
 VITE_MAPBOX_TOKEN=pk.eyJ1Ijoic2hhc2hpZ2hhcnR

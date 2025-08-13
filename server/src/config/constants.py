@@ -24,7 +24,7 @@ SCENES_CANDIDATES = "scenes_candidates.csv"
 # ============================
 # AWS Configuration
 # ============================
-AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME", "guardian-space-geospatial-data")
+AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME", "glrem-space-geospatial-data")
 AWS_PROCESSED_FOLDER = os.getenv("AWS_PROCESSED_FOLDER", "app-analyzed-data")
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")

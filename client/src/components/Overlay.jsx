@@ -16,22 +16,33 @@ const Overlay = () => {
         const sourceId = `raster-source-${index}`;
         if (selectedLayers.includes(layer.filename) && isValid) {
           const features = layer.metadata?.features?.[0];
-          let coordinates = features?.geometry?.coordinates;
+          const coordinates = features?.geometry?.coordinates;
           const [lowerLeft, upperLeft, upperRight, lowerRight] =
             coordinates?.[0]?.slice(0, 4) || [];
-            console.log(
-              [lowerLeft, upperLeft, upperRight, lowerRight],
-              layer.image,
-            );
+          console.log(
+            [lowerLeft, upperLeft, upperRight, lowerRight],
+            layer.image
+          );
 
-            paint: {
-             "raster-opacity": 0.9,
-            },
+          if (coordinates && !map.getLayer(layerId)) {
+            map.addSource(sourceId, {
+              type: "image",
+              url: layer.image,
+              coordinates: [lowerLeft, lowerRight, upperRight, upperLeft],
             });
+
+            map.addLayer({
+              id: layerId,
+              type: "raster",
+              source: sourceId,
+              paint: {
+                "raster-opacity": 0.7,
+              },
+            });
+          } else {
+            map.removeLayer(layerId);
+            map.removeSource(sourceId);
           }
-        } else {
-          map.removeLayer(layerId);
-          map.removeSource(sourceId);
         }
       }
     }
