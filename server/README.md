@@ -1,4 +1,4 @@
-# About
+# Backend
 Workflow for the Omdena pipeline.
 
 # Getting Started
