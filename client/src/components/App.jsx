@@ -19,7 +19,7 @@ const App = () => {
     <div className="container-fluid main">
       <nav className="navbar navbar-expand-lg navbar-light bg-light">
         <div className="container-fluid">
-          <div className="navbar-brand">Guardian Space</div>
+          <div className="navbar-brand">GLREM Space</div>
           <CountrySelector />
           <div className="ml-auto">
             <Link to="/login" onClick={handleLogout} className="btn btn-link">

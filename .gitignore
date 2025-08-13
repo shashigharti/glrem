@@ -1,4 +1,4 @@
 # Data
 data/
-guardian.db
+glremdata.db
 server/scripts/update_task.py

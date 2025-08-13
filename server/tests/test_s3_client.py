@@ -13,7 +13,7 @@ def test_upload_file(mock_s3_client, tmp_path):
 
     upload_file(str(temp_file), s3_filename)
 
-    s3_objects = mock_s3_client.list_objects_v2(Bucket="guardian-space-geospatial-data")
+    s3_objects = mock_s3_client.list_objects_v2(Bucket="glrem-space-geospatial-data")
     assert "Contents" in s3_objects
 
     uploaded_files = [obj["Key"] for obj in s3_objects["Contents"]]

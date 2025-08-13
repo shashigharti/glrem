@@ -66,7 +66,7 @@ const Events = () => {
         const starttime = tenYearsAgo.toISOString();
         const endtime = new Date().toISOString();
         const minmagnitude = 5;
-        const url = `${import.meta.env.VITE_APP_ENDPOINT}/events/earthquakes`;
+        const url = `${import.meta.env.VITE_APP_ENDPOINT}/earthquakes`;
 
         const data = await getRequest(url, {
           coordinates,

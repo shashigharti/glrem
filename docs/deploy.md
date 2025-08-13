@@ -1,5 +1,5 @@
 
-# Deploy Guardian Space Server
+# Deploy GLREM Space Server
 
 The deployment uses Gunicorn with Uvicorn workers to handle the server, and Nginx is used as a reverse proxy.
 
@@ -45,7 +45,7 @@ sudo apt install nginx
 Create or modify the Nginx configuration file for your app:
 
 ```bash
-sudo vi /etc/nginx/sites-available/guardian-server
+sudo vi /etc/nginx/sites-available/glrem-server
 ```
 
 Add the following configuration:
@@ -70,7 +70,7 @@ server {
 Create a symbolic link to enable the configuration:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/guardian-server.conf /etc/nginx/sites-enabled
+sudo ln -s /etc/nginx/sites-available/glrem-server.conf /etc/nginx/sites-enabled
 ```
 
 ### Restart Nginx
@@ -86,14 +86,14 @@ sudo systemctl restart nginx
 To ensure Gunicorn starts automatically, create a systemd service file for the server:
 
 ```bash
-sudo vi /etc/systemd/system/guardian-server.service
+sudo vi /etc/systemd/system/glrem-server.service
 ```
 
 Add the following content:
 
 ```ini
 [Unit]
-Description=Guardian Server
+Description=GLREM Server
 After=network.target
 
 [Service]
@@ -114,8 +114,8 @@ Reload the systemd daemon and start the Gunicorn service:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl start guardian-server
-sudo systemctl enable guardian-server
+sudo systemctl start glrem-server
+sudo systemctl enable glrem-server
 ```
 
 ## 7. Test the Application

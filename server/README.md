@@ -21,7 +21,7 @@ Copy the ssh key to the github.
 
 3. **Clone the repo**
 ```bash
-git clone git@github.com:shashigharti/omdena-workflow.git
+git clone git@github.com:shashigharti/glrem.git
 ```
 
 4. **Install pygmstar**
@@ -41,8 +41,8 @@ git clone git@github.com:shashigharti/omdena-workflow.git
      ```
 3. **Create a new virtual environment**
    ```bash
-   python3 -m venv envs/guardian
-   . envs/guardian
+   python3 -m venv envs/glrem
+   . envs/glrem
    ```
 4. **Install Dependencies**
    ```bash
@@ -52,22 +52,37 @@ git clone git@github.com:shashigharti/omdena-workflow.git
    ```bash
    sudo vi .env
    ```
+
+   ```bash
    Add following variables:
 
+   # User credentials
    USER_USERNAME=admin
    USER_PASSWORD=admin123
-   WORKDIR=/home/shashi-gharti/python/omdena/GuardianSpaceGeo/data/raw_kahr
-   DATADIR=/home/shashi-gharti/python/omdena/GuardianSpaceGeo/data/data_kahr
-   OUTPUT=/home/shashi-gharti/python/omdena/GuardianSpaceGeo/data/output
-   ASF_USERNAME=GoogleColab2023
-   ASF_PASSWORD=GoogleColab_2023
-   AWS_ACCESS_KEY=AKIARWIL
-   AWS_SECRET_KEY=lYJYWg00kU
-   SH_CLIENTID=AKIARWILO5
-   SH_CLIENT_SECRET=8XufSzKnyre6y4S6
+
+   # Directories
+   WORKDIR=/home/your_username/python/omdena/glremdata/data/raw_kahr
+   DATADIR=/home/your_username/python/omdena/glremdata/data/data_kahr
+   OUTPUT=/home/your_username/python/omdena/glremdata/data/output
+
+   # Alaska Satellite Facility
+   ASF_USERNAME=333
+   ASF_PASSWORD=3333
+
+   # AWS
+   AWS_ACCESS_KEY=3333
+   AWS_SECRET_KEY=33333
+
+   # Satellite processing
    USE_SAMPLE_BURSTS=true
-   LOG_FILENAME=/home/shashi-gharti/python/omdena/GuardianSpaceGeo/server/app.log
-   SQLALCHEMY_DATABASE_URL=sqlite:////home/ubuntu/GuardianSpaceGeo/guardian.db
+
+   # Misc
+   LOG_FILENAME=/home/your_username/python/omdena/glrem/server/app.log
+   SQLALCHEMY_DATABASE_URL=sqlite:////home/your_username/python/omdena/glrem/glremdata.db
+
+   # Third Party Endpoints
+   USGS_ENDPOINT=https://earthquake.usgs.gov/fdsnws/event/1/query
+   ```
 
 
 5. **Install Pre-commit Hooks**

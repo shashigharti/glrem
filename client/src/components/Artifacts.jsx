@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import config from "./../config";
 
-const BUCKET_NAME = "guardian-sentinel1-slc";
+const BUCKET_NAME = "glrem-sentinel1-slc";
 const REGION = "us-east-1";
-const ACCESS_KEY_ID = "AKIARWILO5L446IG244G";
-const SECRET_ACCESS_KEY = "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";
 
 const s3 = new S3Client({
   region: REGION,
   credentials: {
-    accessKeyId: ACCESS_KEY_ID,
-    secretAccessKey: SECRET_ACCESS_KEY,
+    accessKeyId: config.accessAWSKeyID,
+    secretAccessKey: config.secretAWSACCESSKEY,
   },
 });
 
